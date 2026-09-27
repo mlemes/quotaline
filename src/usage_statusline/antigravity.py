@@ -7,6 +7,7 @@ agy keeps its OAuth token in the system keyring.
 import base64
 import json
 import os
+import shlex
 import subprocess
 import time
 import urllib.error
@@ -82,8 +83,12 @@ def fetch_line() -> str:
     if not cmd:
         return fmt_line(LABEL, "n/a (no token command, see README)")
     try:
+        # no shell: the saved command is one program plus its arguments
+        argv = shlex.split(cmd)
+        if not argv:
+            return fmt_line(LABEL, "n/a (no token command, see README)")
         token = extract_token(
-            subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=TIMEOUT).stdout
+            subprocess.run(argv, capture_output=True, text=True, timeout=TIMEOUT).stdout
         )
         if not token:
             return fmt_line(LABEL, "n/a (no token, run agy to log in)")

@@ -74,7 +74,7 @@ def main(argv: list[str], run: Run = sh, which: Callable = shutil.which) -> int:
         return 1
     cmd = lookup_cmd(found[(pick or 1) - 1][1])
     try:
-        token = ag.extract_token(run(["sh", "-c", cmd]))
+        token = ag.extract_token(run(shlex.split(cmd)))
     except ValueError:
         token = ""
     if not token:

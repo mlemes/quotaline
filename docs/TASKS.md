@@ -3,12 +3,12 @@
 ## Current task
 (nothing in progress)
 
-### START HERE (state as of 2026-09-27, stage commit follows `5fa7a5f`)
+### START HERE (state as of 2026-09-27, stage commit follows `df35dd8`)
 **Done:** The Claude line, the Antigravity lines (one per quota group, from
 `retrieveUserQuotaSummary`), `install.sh`, and the keyring auto-setup (`agy_setup.py`) are
-built. The project is also the Claude Code plugin `quotaline` (version 0.1.0) and its own
+built. The project is also the Claude Code plugin `quotaline` (version 0.1.1) and its own
 marketplace, `quotaline@mlemes`,
-published at https://github.com/mlemes/quotaline. All 35 tests pass, lint is clean, and
+published at https://github.com/mlemes/quotaline. All 36 tests pass, lint is clean, and
 `claude plugin validate .` passes with no warnings. Raise `version` in `plugin.json` and
 `pyproject.toml` on every release, or users get no update. All lines share one
 aligned layout from `claude.py`. On 2026-09-27, the Antigravity lines were verified live:
@@ -74,6 +74,9 @@ claude plugin validate .
 - `git mv -k` on an untracked directory silently does nothing. Use plain `mv`.
 
 ## Done
+- [x] 2026-09-27 Directory lint fixes, version 0.1.1: icon, token command without a shell, README
+  issuer note, and the dev `CLAUDE.md` and `.claude/` moved to private workspace rules (36 tests).
+  Still held for a reviewer by design: the keyring token read and `install.sh`'s Python.
 - [x] 2026-09-27 Renamed the plugin and repo to `quotaline`, set version 0.1.0, pinned the dev
   launchers, and listed in the README what the plugin runs, reads, writes, and sends (35 tests).
 - [x] 2026-09-27 Plugin, `mlemes` marketplace, MIT license, and public repo (35 tests).

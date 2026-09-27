@@ -1,5 +1,6 @@
 import base64
 import json
+import shlex
 from pathlib import Path
 
 import pytest
@@ -23,9 +24,9 @@ ITEMS = {
 
 def fake_run(items: dict) -> setup.Run:
     def run(args: list[str]) -> str:
-        if args[0] == "sh":  # secret-tool lookup
+        if args[0] == "secret-tool":
             for _, attrs, secret in items.values():
-                if args[2] == setup.lookup_cmd(attrs):
+                if args == shlex.split(setup.lookup_cmd(attrs)):
                     return secret
             return ""
         path, name = args[args.index("-o") + 1], args[-1]

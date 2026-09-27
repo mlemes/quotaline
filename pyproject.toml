@@ -1,6 +1,6 @@
 [project]
 name = "usage-statusline"
-version = "0.1.0"
+version = "0.1.1"
 description = "Claude Code status line that shows Claude Pro and Antigravity quota usage with reset times, plus an install script."
 requires-python = ">=3.13"
 

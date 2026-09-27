@@ -52,7 +52,7 @@ flowchart LR
 |---|---|---|
 | `src/usage_statusline/main.py` | Reads stdin and prints the Claude line, then the Antigravity lines | built (2 tests in `test_smoke.py`) |
 | `src/usage_statusline/claude.py` | Formats the Claude 5-hour and 7-day windows, and owns the aligned layout shared by all lines | built (4 tests) |
-| `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses quota groups, and caches the lines | built (9 tests), verified live on 2026-09-27 |
+| `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses quota groups, and caches the lines | built (10 tests), verified live on 2026-09-27 |
 | `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (9 tests), verified on the real keyring on 2026-09-27 |
 | `install.sh` | Installs or uninstalls the settings entry, then runs `agy_setup`. With `--dest`, runs from a copy | built (6 tests) |
 | `.claude-plugin/`, `skills/`, `hooks/` | Plugin manifest, `mlemes` marketplace, install and uninstall skills, and the sync hook | built (2 tests in `test_plugin.py`), `claude plugin validate .` passes |
@@ -73,10 +73,13 @@ flowchart LR
 - Plugin: `/quotaline:install [--no-agy] [--agy-entry N]` and `/quotaline:uninstall`, both `disable-model-invocation: true`.
 
 ## Key decisions
+- 2026-09-27: The token command runs without a shell (`shlex.split`, `shell=False`), in both `antigravity.py` and `agy_setup.py`. The directory flagged `shell=True` next to a URL fetch as download-and-execute, and the saved `secret-tool lookup` needs no shell. Custom commands can't use pipes; wrap them in a script.
+- 2026-09-27: The project has no `CLAUDE.md` or `.claude/`, unlike the workspace template. The directory flags a root `CLAUDE.md` (plugins don't load it) and scanned the template's `.claude/skills/` as plugin surfaces. The dev rules live in the monorepo's private `.claude/rules/usage-statusline-dev.md`.
+- 2026-09-27: `install.sh` keeps its Python here-document. The directory sends it to a reviewer, but it would send the `agy_setup` module that `install.sh` also runs anyway.
 - 2026-09-27: Published as a plugin from its own repository, which is also the `mlemes` marketplace (`source: "./"`). A plugin can't set `statusLine` (plugin `settings.json` honors only `agent` and `subagentStatusLine`), so the install skill runs `install.sh`.
 - 2026-09-27: The plugin runs the status line from a copy in `${CLAUDE_PLUGIN_DATA}/src`, because `${CLAUDE_PLUGIN_ROOT}` changes on every plugin update. A SessionStart hook refreshes the copy. The copy is swapped in whole so a running status line never sees a partial package.
 - 2026-09-27: Renamed the plugin and repository to `quotaline`, because the directory holds generic names and names close to existing ones (`claude-usage-statusline`) for review, and brand names (`claude`, `antigravity`) too. The Python package, the config and cache paths, and the monorepo directory keep `usage-statusline`, so existing installs keep working.
-- 2026-09-27: `plugin.json` sets `version` (0.1.0, same as `pyproject.toml`), as the plugin directory asks. Users get an update only when `version` rises, so raise it on every release.
+- 2026-09-27: `plugin.json` sets `version` (same as `pyproject.toml`, 0.1.1 as of 2026-09-27), as the plugin directory asks. Users get an update only when `version` rises, so raise it on every release.
 - 2026-09-27: The README lists everything the plugin runs, reads, writes, and sends, for the directory's security scan. Reading `agy`'s token from the keyring will likely be held for a reviewer ("uses a credential from the user's machine"). `userConfig` can't replace it, because the token expires about hourly.
 - 2026-09-27: MIT license.
 - 2026-09-27: Antigravity shows one line per quota group from `retrieveUserQuotaSummary`, at your request. This endpoint has both the 5-hour and weekly windows, and it shows that Gemini Flash and Pro share one quota, so per-model lines from `fetchAvailableModels` were misleading.

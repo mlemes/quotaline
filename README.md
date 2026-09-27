@@ -70,6 +70,8 @@ The status line runs the code from your clone, so keep the clone in place.
 The setup needs `secret-tool`. If it's missing, the installer tells you to run
 `sudo apt install libsecret-tools`. To set the command by hand instead, write it to
 `~/.config/usage-statusline/agy_token_cmd`, or export it as `USAGE_STATUSLINE_AGY_TOKEN_CMD`.
+The status line runs it as one program with arguments, without a shell, so pipes and `$VARS`
+don't work. Wrap anything more complex in a script and save the script's path.
 The status line accepts a plain token, oauth2 JSON with `access_token`, or a
 `go-keyring-base64:` value.
 
@@ -93,7 +95,8 @@ shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
   plugin's data directory.
 - **Sends:** at most one HTTPS request every 60 seconds, a `POST` with body `{}` to
   `https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`, with the
-  `agy` token as a Bearer token. This is the Google endpoint that `agy` itself calls. It's
+  `agy` token as a Bearer token. The token is a Google OAuth token that Google issued to `agy`,
+and it goes only to Google's own API, the endpoint that `agy` itself calls. It's
   internal and undocumented, so it can change without notice. Without the Antigravity setup,
   the plugin makes no network requests. There's no telemetry, and nothing else leaves your
   machine.

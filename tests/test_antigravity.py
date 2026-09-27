@@ -82,6 +82,21 @@ def test_empty_token(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "no token" in ag.fetch_line()
 
 
+def test_token_command_runs_without_a_shell(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent = {}
+
+    def fake_urlopen(req, timeout):
+        sent.update(req.headers)
+        return io.BytesIO(json.dumps(RESP).encode())
+
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo 'ya29.abc' | cat")
+    monkeypatch.setattr(ag.urllib.request, "urlopen", fake_urlopen)
+    ag.fetch_line()
+    assert sent["Authorization"] == "Bearer ya29.abc | cat"  # echo got the pipe as text
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "  ")
+    assert "no token command" in ag.fetch_line()
+
+
 def test_fetch_sends_token_and_user_agent(monkeypatch: pytest.MonkeyPatch) -> None:
     sent = {}
 
