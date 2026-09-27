@@ -13,7 +13,31 @@ AG Claude/GPT  session   0% · resets Sun 16:02 | week  19% · resets Sun 00:50
 **AG Gemini** covers Gemini Flash and Pro, which share one quota. **AG Claude/GPT** covers the
 Claude and GPT models in Antigravity.
 
-## Install
+## Requirements
+
+- Linux with `python3` 3.13 or later. The Antigravity setup also needs `gdbus` and
+  `secret-tool` (`sudo apt install libsecret-tools`).
+- A Claude Pro or Max plan for the Claude line, and a logged-in `agy` for the Antigravity lines.
+
+## Install as a Claude Code plugin
+
+1. Add the marketplace and install the plugin:
+
+   ```bash
+   claude plugin marketplace add mlemes/usage-statusline
+   claude plugin install usage-statusline@mlemes
+   ```
+
+2. In a Claude Code session, run `/usage-statusline:install`. It copies the code to the
+   plugin's data directory, adds a `statusLine` entry to `~/.claude/settings.json`, and sets up
+   the Antigravity line. Pass `--no-agy` or `--agy-entry N` as with `install.sh`.
+3. Restart Claude Code. The Claude line fills in after the first reply.
+
+A plugin can't set your status line by itself, so step 2 is required. After a plugin update,
+the plugin refreshes its copy of the code at the next session start. To remove the status line,
+run `/usage-statusline:uninstall`, then `claude plugin uninstall usage-statusline@mlemes`.
+
+## Install from a clone
 
 1. Run the installer:
 
@@ -28,6 +52,7 @@ Claude and GPT models in Antigravity.
 
 To remove the status line, run `./install.sh --uninstall`. To skip the Antigravity setup, run
 `./install.sh --no-agy`.
+The status line runs the code from your clone, so keep the clone in place.
 
 ## Set up the Antigravity line
 
@@ -61,3 +86,7 @@ shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
   result, including errors, is cached in `~/.cache/usage-statusline/antigravity.json` for 60
   seconds, with a 2-second timeout.
 - A missing window shows `--` and keeps its width, so the columns stay aligned.
+
+## License
+
+MIT. See `LICENSE`.

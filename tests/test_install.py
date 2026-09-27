@@ -50,3 +50,33 @@ def test_uninstall_removes_only_our_status_line(tmp_path: Path) -> None:
     run(settings)
     run(settings, "--uninstall")
     assert "statusLine" not in json.loads(settings.read_text())
+
+
+def test_dest_copies_code_and_runs_from_there(tmp_path: Path) -> None:
+    settings, dest = tmp_path / "settings.json", tmp_path / "plugin data"
+    run(settings, "--dest", str(dest))
+    assert (dest / "src" / "usage_statusline" / "main.py").is_file()
+    cmd = json.loads(settings.read_text())["statusLine"]["command"]
+    # temp HOME and a no-op token command: never the real keyring, cache, or network
+    env = {**os.environ, "HOME": str(tmp_path), "USAGE_STATUSLINE_AGY_TOKEN_CMD": "true"}
+    out = subprocess.run(
+        ["bash", "-c", cmd], input="{}", env=env, capture_output=True, text=True, check=True
+    ).stdout
+    assert out.startswith("Claude ")  # the quoted path with a space still works
+    assert "n/a (no token" in out
+    run(settings, "--dest", str(dest), "--uninstall")
+    assert "statusLine" not in json.loads(settings.read_text())
+    assert not (dest / "src").exists()
+
+
+def test_sync_refreshes_only_an_installed_copy(tmp_path: Path) -> None:
+    settings, dest = tmp_path / "settings.json", tmp_path / "data"
+    run(settings, "--dest", str(dest), "--sync")
+    assert not dest.exists() and not settings.exists()  # not installed: no-op
+    run(settings, "--dest", str(dest))
+    stale = dest / "src" / "usage_statusline" / "stale.py"
+    stale.write_text("")
+    before = settings.read_text()
+    run(settings, "--dest", str(dest), "--sync")
+    assert not stale.exists() and (dest / "src" / "usage_statusline" / "main.py").is_file()
+    assert settings.read_text() == before

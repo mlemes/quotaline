@@ -1,0 +1,12 @@
+{
+  "name": "mlemes",
+  "description": "Claude Code plugins by Marcus Lemes",
+  "owner": { "name": "Marcus Lemes", "url": "https://github.com/mlemes" },
+  "plugins": [
+    {
+      "name": "usage-statusline",
+      "source": "./",
+      "description": "Status line with your Claude Pro and Antigravity session and weekly quota usage, with reset times."
+    }
+  ]
+}

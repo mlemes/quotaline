@@ -1,0 +1,10 @@
+{
+  "name": "usage-statusline",
+  "displayName": "Usage status line",
+  "description": "Status line with your Claude Pro and Antigravity session and weekly quota usage, with reset times.",
+  "author": { "name": "Marcus Lemes", "url": "https://github.com/mlemes" },
+  "homepage": "https://github.com/mlemes/usage-statusline",
+  "repository": "https://github.com/mlemes/usage-statusline",
+  "license": "MIT",
+  "keywords": ["statusline", "usage", "quota", "antigravity"]
+}

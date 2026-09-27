@@ -6,7 +6,8 @@ JSON to the command on stdin. `usage_statusline` prints three aligned lines. The
 Claude Pro 5-hour and 7-day usage from that JSON. The others show one Antigravity (`agy`) quota
 group each (Gemini, and Claude/GPT) with its 5-hour and weekly usage, fetched from Google's Code
 Assist API and cached. `install.sh` wires the command into
-`~/.claude/settings.json`.
+`~/.claude/settings.json`. The same repository is a Claude Code plugin and its own marketplace
+(`usage-statusline@mlemes`), whose skills run `install.sh` for you.
 
 ## Diagram
 
@@ -24,11 +25,14 @@ flowchart TB
     inst --> setup["0b. Keyring setup<br/><code>src/usage_statusline/agy_setup.py</code>"]
     keyring([system keyring via gdbus + secret-tool]) --> setup
     setup --> tok
+    skill["0c. Plugin skills + SessionStart hook<br/><code>skills/, hooks/hooks.json</code>"] --> inst
+    inst --> data([code copy in CLAUDE_PLUGIN_DATA/src])
 ```
 
 | Stage | Module | Reads | Writes |
 |---|---|---|---|
-| 0a. Installer | `install.sh` | `~/.claude/settings.json` | `statusLine` key, one-time `.bak-usage-statusline` backup |
+| 0a. Installer | `install.sh` | `~/.claude/settings.json` | `statusLine` key, one-time `.bak-usage-statusline` backup, `DIR/src` with `--dest` |
+| 0c. Plugin | `skills/install`, `skills/uninstall`, `hooks/hooks.json` | `${CLAUDE_PLUGIN_ROOT}` | runs `install.sh --dest ${CLAUDE_PLUGIN_DATA}` (`--sync` at session start) |
 | 0b. Keyring setup | `src/usage_statusline/agy_setup.py` | keyring labels and attributes, one secret lookup | `~/.config/usage-statusline/agy_token_cmd` |
 | 1. Entry point | `src/usage_statusline/main.py` | stdin JSON | stdout |
 | 2. Claude line | `src/usage_statusline/claude.py` | `rate_limits` in the JSON | one line, plus the shared column layout |
@@ -50,7 +54,8 @@ flowchart LR
 | `src/usage_statusline/claude.py` | Formats the Claude 5-hour and 7-day windows, and owns the aligned layout shared by all lines | built (4 tests) |
 | `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses quota groups, and caches the lines | built (9 tests), verified live on 2026-09-27 |
 | `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (9 tests), verified on the real keyring on 2026-09-27 |
-| `install.sh` | Installs or uninstalls the settings entry, then runs `agy_setup` | built (4 tests) |
+| `install.sh` | Installs or uninstalls the settings entry, then runs `agy_setup`. With `--dest`, runs from a copy | built (6 tests) |
+| `.claude-plugin/`, `skills/`, `hooks/` | Plugin manifest, `mlemes` marketplace, install and uninstall skills, and the sync hook | built (2 tests in `test_plugin.py`), `claude plugin validate .` passes |
 
 ### Public API of what is built
 - `claude.claude_line(data: dict) -> str`: never raises on missing fields.
@@ -64,9 +69,14 @@ flowchart LR
 - `antigravity.antigravity_line(cache: Path = CACHE, now: float | None = None) -> str`: returns the possibly multi-line text, fetches at most once per `CACHE_TTL` (60 s), and caches errors too.
 - `antigravity.extract_token(raw: str) -> str`: accepts a plain token, oauth2 JSON (`access_token`), agy's wrapper (`{"token": {oauth2}}`), or `go-keyring-base64:`. Raises `ValueError` on bad JSON or base64.
 - `agy_setup.main(argv, run=sh, which=shutil.which) -> int`: returns 0 when it saves the config, 1 otherwise. `run` takes an argv list and returns stdout, which tests replace with a fake keyring.
-- `install.sh [--uninstall] [--no-agy] [--agy-entry N]`: the `CLAUDE_SETTINGS` env var overrides the settings path. Tests always pass `--no-agy`.
+- `install.sh [--uninstall] [--no-agy] [--agy-entry N] [--dest DIR [--sync]]`: the `CLAUDE_SETTINGS` env var overrides the settings path. Tests always pass `--no-agy`. `--dest DIR` swaps a fresh copy into `DIR/src` and points `statusLine` there. `--uninstall --dest DIR` also deletes `DIR/src`. `--sync` refreshes `DIR/src` only if it exists and never touches settings.
+- Plugin: `/usage-statusline:install [--no-agy] [--agy-entry N]` and `/usage-statusline:uninstall`, both `disable-model-invocation: true`.
 
 ## Key decisions
+- 2026-09-27: Published as a plugin from its own repository, which is also the `mlemes` marketplace (`source: "./"`). A plugin can't set `statusLine` (plugin `settings.json` honors only `agent` and `subagentStatusLine`), so the install skill runs `install.sh`.
+- 2026-09-27: The plugin runs the status line from a copy in `${CLAUDE_PLUGIN_DATA}/src`, because `${CLAUDE_PLUGIN_ROOT}` changes on every plugin update. A SessionStart hook refreshes the copy. The copy is swapped in whole so a running status line never sees a partial package.
+- 2026-09-27: `plugin.json` has no `version`, so updates follow the git commit SHA. `claude plugin validate` warns about this, and the warning is expected.
+- 2026-09-27: MIT license.
 - 2026-09-27: Antigravity shows one line per quota group from `retrieveUserQuotaSummary`, at your request. This endpoint has both the 5-hour and weekly windows, and it shows that Gemini Flash and Pro share one quota, so per-model lines from `fetchAvailableModels` were misleading.
 - 2026-09-27: All lines share one layout in `claude.py` (label width 15, 3-digit percent, fixed-width missing windows), at your request, so the `session`, `|`, and `week` columns align.
 - 2026-09-27: The API request sends `User-Agent: antigravity`, because Google returns 403 to the default `Python-urllib` agent.
