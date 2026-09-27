@@ -5,11 +5,12 @@
 
 ### START HERE (state as of 2026-09-27, stage commit follows scaffold `7cc1598`)
 **Done:** The Claude line, the Antigravity line (parser, cache, and token command), and
-`install.sh` are built. All 15 tests pass and lint is clean. `install.sh` has NOT been run
-against the real `~/.claude/settings.json` yet.
+`install.sh` are built. All 15 tests pass and lint is clean. On 2026-09-27, `install.sh` was run
+against the real `~/.claude/settings.json`. No `statusLine` existed before. The backup is at
+`~/.claude/settings.json.bak-usage-statusline`.
 
 **Next:**
-1. Run `./install.sh` and confirm that the Claude line shows real numbers after one reply.
+1. Restart Claude Code and confirm that the Claude line shows real numbers after one reply.
 2. Configure the `agy` token command (see `README.md`), then confirm that the live
    `fetchAvailableModels` response matches `docs/DATA.md`. If it doesn't, fix
    `antigravity.parse_quota` and its fixture in `tests/test_antigravity.py`.
