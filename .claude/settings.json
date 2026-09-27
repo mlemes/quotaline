@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m pytest*)",
+      "Bash(ruff check*)",
+      "Bash(ruff format*)",
+      "Bash(python3 -m usage_statusline*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(rg *)",
+      "Bash(ls*)"
+    ],
+    "deny": [
+      "Bash(sudo*)",
+      "Bash(pip3 install*)",
+      "Bash(pip install*)"
+    ]
+  }
+}

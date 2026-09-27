@@ -1,0 +1,16 @@
+# Ignore dataset contents, but keep the two directories in the repo so a fresh
+# clone has somewhere to write. The `!data/raw/` lines are load-bearing: git
+# cannot re-include a file whose parent directory is excluded, so without them
+# the .gitkeep negations below silently do nothing.
+data/**
+!data/raw/
+!data/raw/.gitkeep
+!data/processed/
+!data/processed/.gitkeep
+*.duckdb
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.egg-info/

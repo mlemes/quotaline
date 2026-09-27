@@ -1,0 +1,17 @@
+[project]
+name = "usage-statusline"
+version = "0.1.0"
+description = "Claude Code status line that shows Claude Pro and Antigravity quota usage with reset times, plus an install script."
+requires-python = ">=3.13"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
