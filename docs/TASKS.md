@@ -3,12 +3,14 @@
 ## Current task
 (nothing in progress)
 
-### START HERE (state as of 2026-09-27, stage commit follows `fbcd196`)
+### START HERE (state as of 2026-09-27, stage commit follows `5fa7a5f`)
 **Done:** The Claude line, the Antigravity lines (one per quota group, from
 `retrieveUserQuotaSummary`), `install.sh`, and the keyring auto-setup (`agy_setup.py`) are
-built. The project is also a Claude Code plugin and its own marketplace, `usage-statusline@mlemes`,
-published at https://github.com/mlemes/usage-statusline. All 35 tests pass, lint is clean, and
-`claude plugin validate .` passes with one expected warning (no `version`). All lines share one
+built. The project is also the Claude Code plugin `quotaline` (version 0.1.0) and its own
+marketplace, `quotaline@mlemes`,
+published at https://github.com/mlemes/quotaline. All 35 tests pass, lint is clean, and
+`claude plugin validate .` passes with no warnings. Raise `version` in `plugin.json` and
+`pyproject.toml` on every release, or users get no update. All lines share one
 aligned layout from `claude.py`. On 2026-09-27, the Antigravity lines were verified live:
 
 ```
@@ -18,18 +20,20 @@ AG Claude/GPT  session   0% · resets Sun 16:02 | week  19% · resets Sun 00:50
 
 The maintainer's machine still runs the status line from this checkout (installed with `./install.sh`
 on 2026-09-27, backup at `~/.claude/settings.json.bak-usage-statusline`). The plugin install
-path (`/usage-statusline:install`) was not yet run end to end.
+path was tested on 2026-09-27 with the CLI in an isolated `HOME` (marketplace add, install,
+`install.sh --dest`, the SessionStart sync, and uninstall), before the rename to `quotaline`.
+A logged-in Claude Code running `/quotaline:install` was not tested.
 
 **Next:**
-1. Install from the public marketplace (`claude plugin marketplace add mlemes/usage-statusline`,
-   `claude plugin install usage-statusline@mlemes`), run `/usage-statusline:install`, restart,
+1. Install from the public marketplace (`claude plugin marketplace add mlemes/quotaline`,
+   `claude plugin install quotaline@mlemes`), run `/quotaline:install`, restart,
    and confirm all three lines show.
 
 **Verify:**
 ```bash
 cd ~/Projects/projects/usage-statusline
-~/.local/bin/uvx --with pytest pytest -q     # no pip for python3 on this box
-~/.local/bin/uvx ruff check .
+~/.local/bin/uvx --with pytest==9.1.1 pytest -q     # no pip for python3 on this box
+~/.local/bin/uvx ruff==0.16.9 check .
 echo '{}' | PYTHONPATH=src python3 -m usage_statusline
 claude plugin validate .
 ```
@@ -66,10 +70,12 @@ claude plugin validate .
   go back to it.
 - agy nests the oauth2 token under `"token"` in its keyring secret.
 - Tests must pass `--no-agy` to `install.sh`, or they touch the real keyring.
-- `python3 -m pytest` fails with `No module named pytest`. Use `uvx --with pytest`.
+- `python3 -m pytest` fails with `No module named pytest`. Use `uvx --with pytest==9.1.1 pytest`.
 - `git mv -k` on an untracked directory silently does nothing. Use plain `mv`.
 
 ## Done
+- [x] 2026-09-27 Renamed the plugin and repo to `quotaline`, set version 0.1.0, pinned the dev
+  launchers, and listed in the README what the plugin runs, reads, writes, and sends (35 tests).
 - [x] 2026-09-27 Plugin, `mlemes` marketplace, MIT license, and public repo (35 tests).
 - [x] 2026-09-27 One aligned line per Antigravity quota group, session and weekly (31 tests).
 - [x] 2026-09-27 Antigravity line verified live (fixed the nested token and the User-Agent 403).

@@ -1,10 +1,19 @@
 {
-  "name": "usage-statusline",
-  "displayName": "Usage status line",
+  "name": "quotaline",
+  "version": "0.1.0",
+  "displayName": "Quotaline",
   "description": "Status line with your Claude Pro and Antigravity session and weekly quota usage, with reset times.",
-  "author": { "name": "Marcus Lemes", "url": "https://github.com/mlemes" },
-  "homepage": "https://github.com/mlemes/usage-statusline",
-  "repository": "https://github.com/mlemes/usage-statusline",
+  "author": {
+    "name": "Marcus Lemes",
+    "url": "https://github.com/mlemes"
+  },
+  "homepage": "https://github.com/mlemes/quotaline",
+  "repository": "https://github.com/mlemes/quotaline",
   "license": "MIT",
-  "keywords": ["statusline", "usage", "quota", "antigravity"]
+  "keywords": [
+    "statusline",
+    "usage",
+    "quota",
+    "antigravity"
+  ]
 }

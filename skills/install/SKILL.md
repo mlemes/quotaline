@@ -18,6 +18,6 @@ system keyring. It never prints the token, and you must never print it either.
 After it runs, tell the user:
 
 - Restart Claude Code. The Claude line fills in after the first reply.
-- If the output lists several keyring entries, run `/usage-statusline:install --agy-entry N`.
+- If the output lists several keyring entries, run `/quotaline:install --agy-entry N`.
 - If it asks for `secret-tool`, run `sudo apt install libsecret-tools`, then install again.
-- To skip Antigravity, run `/usage-statusline:install --no-agy`.
+- To skip Antigravity, run `/quotaline:install --no-agy`.

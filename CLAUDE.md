@@ -3,8 +3,8 @@
 Claude Code status line that shows Claude Pro and Antigravity quota usage with reset times, plus an install script.
 
 ## Commands
-- Test: `python3 -m pytest -q` (no pip on this box: `~/.local/bin/uvx --with pytest pytest -q`)
-- Lint + format: `ruff check --fix . && ruff format .` (or `~/.local/bin/uvx ruff ...`)
+- Test: `python3 -m pytest -q` (no pip on this box: `~/.local/bin/uvx --with pytest==9.1.1 pytest -q`)
+- Lint + format: `ruff check --fix . && ruff format .` (or `~/.local/bin/uvx ruff==0.16.9 ...`)
 - Run: `PYTHONPATH=src python3 -m usage_statusline`  <!-- src-layout: the package is not on sys.path without this -->
   (pytest does not need it — `[tool.pytest.ini_options] pythonpath = ["src"]` covers the test run only)
 

@@ -12,4 +12,4 @@ bash "${CLAUDE_PLUGIN_ROOT}/install.sh" --dest "${CLAUDE_PLUGIN_DATA}" --uninsta
 
 The command removes `statusLine` from `~/.claude/settings.json` only if it still points at this
 plugin. Tell the user to restart Claude Code, and that they can now uninstall the plugin with
-`claude plugin uninstall usage-statusline@mlemes`.
+`claude plugin uninstall quotaline@mlemes`.

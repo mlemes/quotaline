@@ -1,4 +1,4 @@
-# usage-statusline
+# quotaline
 
 This project adds three aligned lines to the Claude Code status line. They show the 5-hour
 session and weekly usage, each with its reset time, for your Claude Pro plan and for each
@@ -24,18 +24,18 @@ Claude and GPT models in Antigravity.
 1. Add the marketplace and install the plugin:
 
    ```bash
-   claude plugin marketplace add mlemes/usage-statusline
-   claude plugin install usage-statusline@mlemes
+   claude plugin marketplace add mlemes/quotaline
+   claude plugin install quotaline@mlemes
    ```
 
-2. In a Claude Code session, run `/usage-statusline:install`. It copies the code to the
+2. In a Claude Code session, run `/quotaline:install`. It copies the code to the
    plugin's data directory, adds a `statusLine` entry to `~/.claude/settings.json`, and sets up
    the Antigravity line. Pass `--no-agy` or `--agy-entry N` as with `install.sh`.
 3. Restart Claude Code. The Claude line fills in after the first reply.
 
 A plugin can't set your status line by itself, so step 2 is required. After a plugin update,
 the plugin refreshes its copy of the code at the next session start. To remove the status line,
-run `/usage-statusline:uninstall`, then `claude plugin uninstall usage-statusline@mlemes`.
+run `/quotaline:uninstall`, then `claude plugin uninstall quotaline@mlemes`.
 
 ## Install from a clone
 
@@ -75,6 +75,28 @@ The status line accepts a plain token, oauth2 JSON with `access_token`, or a
 
 The access token expires about an hour after `agy` last refreshed it. When it expires, the line
 shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
+
+## What this plugin runs, reads, and sends
+
+- **Runs:** `install.sh`, only when you run `/quotaline:install` or `/quotaline:uninstall`. A
+  SessionStart hook runs `install.sh --sync`, which copies the plugin's Python code into its data
+  directory, and only if you already installed. The status line runs
+  `python3 -m usage_statusline` from that copy. Nothing is downloaded or installed from a
+  package registry.
+- **Reads:** the status line JSON that Claude Code sends (for `rate_limits`). During setup, the
+  labels and attributes of your keyring entries (through `gdbus`) and the one matching `agy`
+  entry (through `secret-tool`). At run time, the saved `secret-tool lookup` command, which
+  returns `agy`'s current OAuth access token. The plugin never prints or stores the token.
+- **Writes:** the `statusLine` key in `~/.claude/settings.json`, with a one-time backup,
+  `~/.config/usage-statusline/agy_token_cmd` (the lookup command, not the token),
+  `~/.cache/usage-statusline/antigravity.json` (the formatted lines), and the code copy in the
+  plugin's data directory.
+- **Sends:** at most one HTTPS request every 60 seconds, a `POST` with body `{}` to
+  `https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`, with the
+  `agy` token as a Bearer token. This is the Google endpoint that `agy` itself calls. It's
+  internal and undocumented, so it can change without notice. Without the Antigravity setup,
+  the plugin makes no network requests. There's no telemetry, and nothing else leaves your
+  machine.
 
 ## How it works
 

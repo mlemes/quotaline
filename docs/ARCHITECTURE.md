@@ -6,8 +6,8 @@ JSON to the command on stdin. `usage_statusline` prints three aligned lines. The
 Claude Pro 5-hour and 7-day usage from that JSON. The others show one Antigravity (`agy`) quota
 group each (Gemini, and Claude/GPT) with its 5-hour and weekly usage, fetched from Google's Code
 Assist API and cached. `install.sh` wires the command into
-`~/.claude/settings.json`. The same repository is a Claude Code plugin and its own marketplace
-(`usage-statusline@mlemes`), whose skills run `install.sh` for you.
+`~/.claude/settings.json`. The same repository is published as the Claude Code plugin `quotaline`, and it's also its
+own marketplace (`quotaline@mlemes`), whose skills run `install.sh` for you.
 
 ## Diagram
 
@@ -70,12 +70,14 @@ flowchart LR
 - `antigravity.extract_token(raw: str) -> str`: accepts a plain token, oauth2 JSON (`access_token`), agy's wrapper (`{"token": {oauth2}}`), or `go-keyring-base64:`. Raises `ValueError` on bad JSON or base64.
 - `agy_setup.main(argv, run=sh, which=shutil.which) -> int`: returns 0 when it saves the config, 1 otherwise. `run` takes an argv list and returns stdout, which tests replace with a fake keyring.
 - `install.sh [--uninstall] [--no-agy] [--agy-entry N] [--dest DIR [--sync]]`: the `CLAUDE_SETTINGS` env var overrides the settings path. Tests always pass `--no-agy`. `--dest DIR` swaps a fresh copy into `DIR/src` and points `statusLine` there. `--uninstall --dest DIR` also deletes `DIR/src`. `--sync` refreshes `DIR/src` only if it exists and never touches settings.
-- Plugin: `/usage-statusline:install [--no-agy] [--agy-entry N]` and `/usage-statusline:uninstall`, both `disable-model-invocation: true`.
+- Plugin: `/quotaline:install [--no-agy] [--agy-entry N]` and `/quotaline:uninstall`, both `disable-model-invocation: true`.
 
 ## Key decisions
 - 2026-09-27: Published as a plugin from its own repository, which is also the `mlemes` marketplace (`source: "./"`). A plugin can't set `statusLine` (plugin `settings.json` honors only `agent` and `subagentStatusLine`), so the install skill runs `install.sh`.
 - 2026-09-27: The plugin runs the status line from a copy in `${CLAUDE_PLUGIN_DATA}/src`, because `${CLAUDE_PLUGIN_ROOT}` changes on every plugin update. A SessionStart hook refreshes the copy. The copy is swapped in whole so a running status line never sees a partial package.
-- 2026-09-27: `plugin.json` has no `version`, so updates follow the git commit SHA. `claude plugin validate` warns about this, and the warning is expected.
+- 2026-09-27: Renamed the plugin and repository to `quotaline`, because the directory holds generic names and names close to existing ones (`claude-usage-statusline`) for review, and brand names (`claude`, `antigravity`) too. The Python package, the config and cache paths, and the monorepo directory keep `usage-statusline`, so existing installs keep working.
+- 2026-09-27: `plugin.json` sets `version` (0.1.0, same as `pyproject.toml`), as the plugin directory asks. Users get an update only when `version` rises, so raise it on every release.
+- 2026-09-27: The README lists everything the plugin runs, reads, writes, and sends, for the directory's security scan. Reading `agy`'s token from the keyring will likely be held for a reviewer ("uses a credential from the user's machine"). `userConfig` can't replace it, because the token expires about hourly.
 - 2026-09-27: MIT license.
 - 2026-09-27: Antigravity shows one line per quota group from `retrieveUserQuotaSummary`, at your request. This endpoint has both the 5-hour and weekly windows, and it shows that Gemini Flash and Pro share one quota, so per-model lines from `fetchAvailableModels` were misleading.
 - 2026-09-27: All lines share one layout in `claude.py` (label width 15, 3-digit percent, fixed-width missing windows), at your request, so the `session`, `|`, and `week` columns align.

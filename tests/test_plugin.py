@@ -11,7 +11,8 @@ def load(rel: str) -> dict:
 
 def test_marketplace_lists_this_plugin_by_its_manifest_name() -> None:
     plugin, market = load(".claude-plugin/plugin.json"), load(".claude-plugin/marketplace.json")
-    assert "version" not in plugin  # updates follow the git commit SHA
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    assert f'version = "{plugin["version"]}"' in pyproject  # users update only on a bump
     [entry] = market["plugins"]
     assert entry == {**entry, "name": plugin["name"], "source": "./"}
 
