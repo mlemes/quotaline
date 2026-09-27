@@ -80,7 +80,9 @@ shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
 
 ## What this plugin runs, reads, and sends
 
-- **Runs:** `install.sh`, only when you run `/quotaline:install` or `/quotaline:uninstall`. A
+- **Runs:** `install.sh`, only when you run `/quotaline:install` or `/quotaline:uninstall`.
+  `install.sh` runs two bundled Python modules, `usage_statusline.settings_entry` (edits
+  `statusLine`) and `usage_statusline.agy_setup` (finds the keyring entry). A
   SessionStart hook runs `install.sh --sync`, which copies the plugin's Python code into its data
   directory, and only if you already installed. The status line runs
   `python3 -m usage_statusline` from that copy. Nothing is downloaded or installed from a
@@ -95,11 +97,64 @@ shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
   plugin's data directory.
 - **Sends:** at most one HTTPS request every 60 seconds, a `POST` with body `{}` to
   `https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`, with the
-  `agy` token as a Bearer token. The token is a Google OAuth token that Google issued to `agy`,
-and it goes only to Google's own API, the endpoint that `agy` itself calls. It's
+  `agy` token as a Bearer token. The token is a Google OAuth token that Google issued to
+  `agy`, and it goes only to Google's own API, the endpoint that `agy` itself calls. It's
   internal and undocumented, so it can change without notice. Without the Antigravity setup,
   the plugin makes no network requests. There's no telemetry, and nothing else leaves your
   machine.
+
+## Notes for reviewers
+
+The plugin directory's checks flag the points below. Each one is deliberate, and this section
+says why. The code lives in `src/usage_statusline/`, and every file is short enough to read in
+full.
+
+### The `agy` token goes to `daily-cloudcode-pa.googleapis.com`
+
+Checks: `MCP_FORWARDS_CREDENTIAL_ENV` on `README.md` and `antigravity.py`.
+
+- **What the credential is.** The OAuth access token that the Antigravity CLI (`agy`) keeps in
+  the system keyring (`service=gemini`, `username=antigravity`). Google issues it.
+- **Where it goes.** Only to `daily-cloudcode-pa.googleapis.com`, Google's Cloud Code API. The
+  host is the token's own issuer and audience, and it's the same endpoint `agy` calls for the
+  same data. `antigravity.fetch_line` builds the only request in the plugin.
+- **Why not `user_config`.** The access token expires about one hour after `agy` refreshes it,
+  and only `agy` holds the refresh credentials. A value you paste once would stop working
+  within the hour. Reading the current token from the keyring at run time is the only way the
+  line stays current without the plugin handling refresh tokens itself.
+- **What the plugin keeps.** It saves the lookup command (`secret-tool lookup service gemini
+  username antigravity`), never the token. It never prints, logs, or caches the token. The
+  cache holds only the formatted percentages and reset times.
+- **`USAGE_STATUSLINE_AGY_TOKEN_CMD`.** An optional override for that saved command. Its value
+  is a command, not a token, and the status line runs it without a shell.
+- **When it happens.** Only after you run `/quotaline:install`, which the model can't invoke on
+  its own (`disable-model-invocation: true`). `/quotaline:install --no-agy` skips the keyring
+  and the network entirely.
+
+### `install.sh` runs bundled Python
+
+Check: `COMMAND_SCRIPT_NOT_FOLLOWED`.
+
+`install.sh` runs `python3 -m usage_statusline.settings_entry` and
+`python3 -m usage_statusline.agy_setup`, both shipped in `src/usage_statusline/`. Editing
+`~/.claude/settings.json` needs a JSON parser, and Python's standard library is safer than
+`sed` or `jq`. The script has no here-documents, package launchers, package installs, or
+downloads, and the Python code uses only the standard library.
+
+### A URL fetch next to a process start
+
+Check: `RUNTIME_FETCH_EXEC` on `antigravity.py`.
+
+The only process `antigravity.py` starts is the saved token command, which runs before the
+request, without a shell (`shlex.split`, `shell=False`). The response is parsed with
+`json.load` into percentages and times, and nothing from it is run or written as code.
+
+### The SessionStart hook passes `${CLAUDE_PLUGIN_DATA}`
+
+The status line must keep one path in `~/.claude/settings.json`, but `${CLAUDE_PLUGIN_ROOT}`
+changes on every plugin update. The hook copies the plugin's own `src/usage_statusline/` into
+`${CLAUDE_PLUGIN_DATA}/src`, and only if you've already installed. It changes no settings
+and makes no network requests.
 
 ## How it works
 

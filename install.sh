@@ -53,29 +53,9 @@ mkdir -p "$(dirname "$settings")"
 [ -f "$settings" ] || echo '{}' >"$settings"
 [ -f "$settings.bak-usage-statusline" ] || cp "$settings" "$settings.bak-usage-statusline"
 
-python3 - "$settings" "$cmd" "$mode" <<'EOF'
-import json, sys
-
-path, cmd, mode = sys.argv[1:]
-with open(path) as f:
-    s = json.load(f)
-current = (s.get("statusLine") or {}).get("command")
-if mode == "--uninstall":
-    if current == cmd:
-        del s["statusLine"]
-        print(f"Removed usage-statusline from {path}")
-    else:
-        print("usage-statusline is not installed; nothing changed")
-        sys.exit(0)
-else:
-    if current and current != cmd:
-        print(f"Replacing existing statusLine command: {current}")
-    s["statusLine"] = {"type": "command", "command": cmd, "refreshInterval": 60}
-    print(f"Installed usage-statusline in {path}")
-with open(path, "w") as f:
-    json.dump(s, f, indent=2)
-    f.write("\n")
-EOF
+# Reviewer note: both Python steps are modules shipped in src/usage_statusline/, standard
+# library only. See README "Notes for reviewers".
+PYTHONPATH="$here/src" python3 -m usage_statusline.settings_entry "$settings" "$cmd" "$mode"
 
 if [ "$mode" = --uninstall ] && [ -n "$dest" ]; then
   rm -rf "$dest/src"  # stops the SessionStart hook from recreating it

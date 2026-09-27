@@ -1,6 +1,6 @@
 {
   "name": "quotaline",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "displayName": "Quotaline",
   "description": "Status line with your Claude Pro and Antigravity session and weekly quota usage, with reset times.",
   "author": {

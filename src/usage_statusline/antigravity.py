@@ -18,6 +18,8 @@ from pathlib import Path
 from usage_statusline.claude import fmt_line, fmt_windows
 
 # agy calls this too; it returns quota groups, each with a 5h and a weekly bucket.
+# Reviewer note: the token sent here is agy's Google OAuth token, and this Google host is its
+# issuer. It is the plugin's only network request. See README "Notes for reviewers".
 URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
 CACHE_TTL = 60  # seconds; the status line runs far more often than this
 TIMEOUT = 2  # seconds; never stall the status line for long
@@ -83,7 +85,8 @@ def fetch_line() -> str:
     if not cmd:
         return fmt_line(LABEL, "n/a (no token command, see README)")
     try:
-        # no shell: the saved command is one program plus its arguments
+        # No shell: the saved command is one program plus its arguments. The token it prints
+        # goes only to URL, and the response is parsed as JSON, never run.
         argv = shlex.split(cmd)
         if not argv:
             return fmt_line(LABEL, "n/a (no token command, see README)")

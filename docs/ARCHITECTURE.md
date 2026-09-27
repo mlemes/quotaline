@@ -54,7 +54,8 @@ flowchart LR
 | `src/usage_statusline/claude.py` | Formats the Claude 5-hour and 7-day windows, and owns the aligned layout shared by all lines | built (4 tests) |
 | `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses quota groups, and caches the lines | built (10 tests), verified live on 2026-09-27 |
 | `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (9 tests), verified on the real keyring on 2026-09-27 |
-| `install.sh` | Installs or uninstalls the settings entry, then runs `agy_setup`. With `--dest`, runs from a copy | built (6 tests) |
+| `src/usage_statusline/settings_entry.py` | Adds or removes the `statusLine` key in `settings.json`, run by `install.sh` | built (2 tests) |
+| `install.sh` | Installs or uninstalls the settings entry through `settings_entry`, then runs `agy_setup`. With `--dest`, runs from a copy | built (6 tests) |
 | `.claude-plugin/`, `skills/`, `hooks/` | Plugin manifest, `mlemes` marketplace, install and uninstall skills, and the sync hook | built (2 tests in `test_plugin.py`), `claude plugin validate .` passes |
 
 ### Public API of what is built
@@ -69,13 +70,14 @@ flowchart LR
 - `antigravity.antigravity_line(cache: Path = CACHE, now: float | None = None) -> str`: returns the possibly multi-line text, fetches at most once per `CACHE_TTL` (60 s), and caches errors too.
 - `antigravity.extract_token(raw: str) -> str`: accepts a plain token, oauth2 JSON (`access_token`), agy's wrapper (`{"token": {oauth2}}`), or `go-keyring-base64:`. Raises `ValueError` on bad JSON or base64.
 - `agy_setup.main(argv, run=sh, which=shutil.which) -> int`: returns 0 when it saves the config, 1 otherwise. `run` takes an argv list and returns stdout, which tests replace with a fake keyring.
+- `settings_entry.update(settings, cmd, mode) -> str | None`: changes the dict in place; `mode` is `install` or `--uninstall`; returns `None` when uninstall finds another command. CLI: `python3 -m usage_statusline.settings_entry PATH CMD MODE`.
 - `install.sh [--uninstall] [--no-agy] [--agy-entry N] [--dest DIR [--sync]]`: the `CLAUDE_SETTINGS` env var overrides the settings path. Tests always pass `--no-agy`. `--dest DIR` swaps a fresh copy into `DIR/src` and points `statusLine` there. `--uninstall --dest DIR` also deletes `DIR/src`. `--sync` refreshes `DIR/src` only if it exists and never touches settings.
 - Plugin: `/quotaline:install [--no-agy] [--agy-entry N]` and `/quotaline:uninstall`, both `disable-model-invocation: true`.
 
 ## Key decisions
 - 2026-09-27: The token command runs without a shell (`shlex.split`, `shell=False`), in both `antigravity.py` and `agy_setup.py`. The directory flagged `shell=True` next to a URL fetch as download-and-execute, and the saved `secret-tool lookup` needs no shell. Custom commands can't use pipes; wrap them in a script.
-- 2026-09-27: The project has no `CLAUDE.md` or `.claude/`, unlike the workspace template. The directory flags a root `CLAUDE.md` (plugins don't load it) and scanned the template's `.claude/skills/` as plugin surfaces. The dev rules live in the monorepo's private `.claude/rules/usage-statusline-dev.md`.
-- 2026-09-27: `install.sh` keeps its Python here-document. The directory sends it to a reviewer, but it would send the `agy_setup` module that `install.sh` also runs anyway.
+- 2026-09-27: The repository has no `CLAUDE.md`, `.claude/`, `docs/TASKS.md`, or template folders (`data/`, `pipelines/`, `explore/`), unlike the workspace template. Plugins don't load a root `CLAUDE.md`, the plugin directory scanned the template's `.claude/skills/` as plugin surfaces, and none of these files help someone who installs the plugin.
+- 2026-09-27: The `statusLine` edit moved from a Python here-document in `install.sh` to the module `settings_entry.py`, so a reviewer reads, and the tests cover, a plain file. `install.sh` still runs Python, so the directory still sends it to a reviewer, and the README's "Notes for reviewers" explains each flagged point.
 - 2026-09-27: Published as a plugin from its own repository, which is also the `mlemes` marketplace (`source: "./"`). A plugin can't set `statusLine` (plugin `settings.json` honors only `agent` and `subagentStatusLine`), so the install skill runs `install.sh`.
 - 2026-09-27: The plugin runs the status line from a copy in `${CLAUDE_PLUGIN_DATA}/src`, because `${CLAUDE_PLUGIN_ROOT}` changes on every plugin update. A SessionStart hook refreshes the copy. The copy is swapped in whole so a running status line never sees a partial package.
 - 2026-09-27: Renamed the plugin and repository to `quotaline`, because the directory holds generic names and names close to existing ones (`claude-usage-statusline`) for review, and brand names (`claude`, `antigravity`) too. The Python package, the config and cache paths, and the monorepo directory keep `usage-statusline`, so existing installs keep working.
