@@ -107,6 +107,8 @@ def test_entry_without_token(home: Path) -> None:
     [
         "ya29.abc\n",
         json.dumps({"access_token": "ya29.abc"}),
+        # agy's real layout
+        json.dumps({"auth_method": "consumer", "token": {"access_token": "ya29.abc"}}),
         "go-keyring-base64:" + base64.b64encode(b'{"access_token": "ya29.abc"}').decode(),
     ],
 )

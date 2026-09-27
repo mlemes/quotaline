@@ -60,12 +60,17 @@ def format_line(quota: dict[str, tuple[float, datetime]]) -> str:
 
 
 def extract_token(raw: str) -> str:
-    """Access token from a keyring secret: plain, oauth2 JSON, or go-keyring base64."""
+    """Access token from a keyring secret: plain, oauth2 JSON, or go-keyring base64.
+
+    agy stores {"auth_method", "id_token", "token": {oauth2 token}} (seen 2026-09-27).
+    """
     raw = raw.strip()
     if raw.startswith("go-keyring-base64:"):
         raw = base64.b64decode(raw.removeprefix("go-keyring-base64:")).decode().strip()
     if raw.startswith("{"):
         d = json.loads(raw)
+        if isinstance(d.get("token"), dict):
+            d = d["token"]
         return d.get("access_token") or d.get("accessToken") or ""
     return raw
 
@@ -92,7 +97,12 @@ def fetch_line() -> str:
         req = urllib.request.Request(
             URL,
             data=b"{}",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            # Google returns 403 for the default Python-urllib User-Agent (seen 2026-09-27)
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "User-Agent": "antigravity",
+            },
         )
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             return format_line(parse_quota(json.load(r)))

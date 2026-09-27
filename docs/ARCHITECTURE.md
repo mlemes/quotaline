@@ -47,8 +47,8 @@ flowchart LR
 |---|---|---|
 | `src/usage_statusline/main.py` | Reads stdin and prints both lines | built (2 tests) |
 | `src/usage_statusline/claude.py` | Formats the Claude 5-hour and 7-day windows | built (3 tests) |
-| `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses the response, and caches the line | built (10 tests), live API response not verified |
-| `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (8 tests, fake keyring), not yet run on a real keyring |
+| `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses the response, and caches the line | built (12 tests), verified live on 2026-09-27 |
+| `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (8 tests), verified on the real keyring on 2026-09-27 |
 | `install.sh` | Installs or uninstalls the settings entry, then runs `agy_setup` | built (4 tests) |
 
 ### Public API of what is built
@@ -58,11 +58,12 @@ flowchart LR
 - `antigravity.format_line(quota) -> str`
 - `antigravity.fetch_line() -> str`: makes a network call and never raises. Errors become `n/a (...)` text.
 - `antigravity.antigravity_line(cache: Path = CACHE, now: float | None = None) -> str`: fetches at most once per `CACHE_TTL` (60 s), and caches errors too.
-- `antigravity.extract_token(raw: str) -> str`: accepts a plain token, oauth2 JSON (`access_token`), or `go-keyring-base64:`. Raises `ValueError` on bad JSON or base64.
+- `antigravity.extract_token(raw: str) -> str`: accepts a plain token, oauth2 JSON (`access_token`), agy's wrapper (`{"token": {oauth2}}`), or `go-keyring-base64:`. Raises `ValueError` on bad JSON or base64.
 - `agy_setup.main(argv, run=sh, which=shutil.which) -> int`: returns 0 when it saves the config, 1 otherwise. `run` takes an argv list and returns stdout, which tests replace with a fake keyring.
 - `install.sh [--uninstall] [--no-agy] [--agy-entry N]`: the `CLAUDE_SETTINGS` env var overrides the settings path. Tests always pass `--no-agy`.
 
 ## Key decisions
+- 2026-09-27: The API request sends `User-Agent: antigravity`, because Google returns 403 to the default `Python-urllib` agent.
 - 2026-09-27: `install.sh` finds the agy keyring entry itself (`agy_setup.py`), at your request. It saves `secret-tool lookup <attrs>` rather than the token, so no secret lands on disk, and the status line decodes the raw secret with `extract_token`. It skips "Safe Storage" entries, which hold the IDE's Chromium key. Claude Code's auto mode blocks this work, so it was built in default permission mode and tested only against a fake keyring.
 - 2026-09-27: The Antigravity token comes from a command stored in `~/.config/usage-statusline/agy_token_cmd` or `USAGE_STATUSLINE_AGY_TOKEN_CMD`, not a stored token, because the token expires about hourly and agy refreshes it in the keyring.
 - 2026-09-27: Python stdlib, not bash and `jq`, so the parsing and caching can be tested with pytest. Startup cost is about 30 ms per run.

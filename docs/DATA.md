@@ -23,9 +23,8 @@ This project stores no datasets. It reads two JSON inputs.
 - Source: `POST https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels`
   with a Bearer token. `agy` calls this endpoint, as seen in `~/.gemini/antigravity-cli/cli.log`
   on 2026-09-27.
-- **Not verified live.** The shape below comes from the proto field names in the `agy` binary
-  (`remainingFraction`, `resetTime`) and from third-party quota tools. Confirm it with a real
-  response.
+- Verified live on 2026-09-27: HTTP 200 with 27 models, on both `daily-cloudcode-pa` and
+  `cloudcode-pa`. The request body is `{}`, and no project ID is needed.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -33,8 +32,19 @@ This project stores no datasets. It reads two JSON inputs.
 | `models.<id>.quotaInfo.resetTime` | string | RFC 3339 UTC, for example `2026-09-27T18:00:00Z` |
 
 **Quirks:**
+- The request needs a non-default `User-Agent`. With the default `Python-urllib/3.x`, Google
+  returns HTTP 403 even with a valid token. `User-Agent: antigravity` works.
+- An unused model shows `remainingFraction: 1` and a `resetTime` about 5 hours after the
+  request, so the window rolls forward until first use. The endpoint shows no weekly window.
+- `v1internal:retrieveUserQuota` also works. It returns `{"buckets": [{"modelId",
+  "remainingFraction", "resetTime", "tokenType": "WTUS"}]}`, including some internal
+  `chat_NNNNN` IDs without `resetTime`.
 - The `agy` model IDs seen on 2026-09-27 are `gemini-3.8/3.7/3.6-flash-{high,medium,low}`,
   `gemini-3.1-pro-{high,low}`, `claude-sonnet-4-6`, `claude-opus-4-6-thinking`, and
   `gpt-oss-120b-medium`. The GPT-OSS model is not shown.
 - `agy` stores the OAuth token in the system keyring (log line `keyringAuth: loaded token`).
-  The token lasts about one hour, and only `agy` refreshes it.
+  Entry attributes: `service=gemini`, `username=antigravity`, and
+  `xdg:schema=org.freedesktop.Secret.Generic`, with an empty label. The secret is JSON:
+  `{"auth_method": "consumer", "id_token", "token": {"access_token", "expiry",
+  "refresh_token", "token_type"}}`. The access token lasts about one hour, and only `agy`
+  refreshes it.

@@ -1,3 +1,4 @@
+import io
 import json
 from pathlib import Path
 
@@ -48,6 +49,20 @@ def test_no_token_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
 def test_empty_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "true")
     assert "no token" in ag.fetch_line()
+
+
+def test_fetch_sends_token_and_user_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent = {}
+
+    def fake_urlopen(req, timeout):
+        sent.update(req.headers)
+        return io.BytesIO(json.dumps(RESP).encode())
+
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo ya29.abc")
+    monkeypatch.setattr(ag.urllib.request, "urlopen", fake_urlopen)
+    assert "Flash 25%" in ag.fetch_line()
+    assert sent["Authorization"] == "Bearer ya29.abc"
+    assert sent["User-agent"] == "antigravity"  # default Python-urllib gets HTTP 403
 
 
 def test_cache_is_reused_within_ttl(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
