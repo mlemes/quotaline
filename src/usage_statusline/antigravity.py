@@ -1,4 +1,4 @@
-"""Antigravity (agy) quota line, fetched from Google's Code Assist API and cached.
+"""Antigravity (agy) quota lines, one per quota group, from Google's Code Assist API, cached.
 
 The access token comes from a command you configure (see README), because
 agy keeps its OAuth token in the system keyring.
@@ -14,49 +14,42 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from usage_statusline.claude import fmt_window
+from usage_statusline.claude import fmt_line, fmt_windows
 
-# Endpoint agy itself calls (seen in ~/.gemini/antigravity-cli/cli.log).
-URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
+# agy calls this too; it returns quota groups, each with a 5h and a weekly bucket.
+URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
 CACHE_TTL = 60  # seconds; the status line runs far more often than this
 TIMEOUT = 2  # seconds; never stall the status line for long
-LABEL = "Antigravity  "
+LABEL = "Antigravity"
+# Short labels by bucketId prefix; unknown groups fall back to the API displayName.
+GROUP_LABELS = {"gemini": "AG Gemini", "3p": "AG Claude/GPT"}
 CONFIG = Path.home() / ".config" / "usage-statusline" / "agy_token_cmd"
 CACHE = Path.home() / ".cache" / "usage-statusline" / "antigravity.json"
 
-
-def family(model_id: str) -> str | None:
-    """Quota group a model belongs to; None for models we don't show."""
-    m = model_id.lower()
-    if m.startswith("claude"):
-        return "Claude"
-    if m.startswith("gemini") and "flash" in m:
-        return "Flash"
-    if m.startswith("gemini") and "pro" in m:
-        return "Pro"
-    return None
+Window = tuple[float, datetime]
 
 
-def parse_quota(resp: dict) -> dict[str, tuple[float, datetime]]:
-    """Family -> (used %, reset time), keeping the most-used model per family."""
-    out: dict[str, tuple[float, datetime]] = {}
-    for model_id, info in (resp.get("models") or {}).items():
-        q = info.get("quotaInfo") or {}
-        fam = family(model_id)
-        if fam is None or "resetTime" not in q:
-            continue
-        used = 100 * (1 - q.get("remainingFraction", 0))
-        reset = datetime.fromisoformat(q["resetTime"].replace("Z", "+00:00"))
-        if fam not in out or used > out[fam][0]:
-            out[fam] = (used, reset)
+def parse_summary(resp: dict) -> list[tuple[str, Window | None, Window | None]]:
+    """(label, 5h window, weekly window) per quota group, in API order."""
+    out = []
+    for g in resp.get("groups") or []:
+        buckets = g.get("buckets") or []
+        windows: dict[str, Window] = {}
+        for b in buckets:
+            if b.get("window") in ("5h", "weekly") and b.get("resetTime"):
+                used = 100 * (1 - b.get("remainingFraction", 0))  # missing means exhausted
+                reset = datetime.fromisoformat(b["resetTime"].replace("Z", "+00:00"))
+                windows[b["window"]] = (used, reset)
+        prefix = (buckets[0].get("bucketId", "") if buckets else "").split("-")[0]
+        label = GROUP_LABELS.get(prefix) or g.get("displayName") or "AG ?"
+        out.append((label, windows.get("5h"), windows.get("weekly")))
     return out
 
 
-def format_line(quota: dict[str, tuple[float, datetime]]) -> str:
-    if not quota:
-        return LABEL + "no quota data"
-    order = [f for f in ("Flash", "Pro", "Claude") if f in quota]
-    return LABEL + " | ".join(fmt_window(f, *quota[f]) for f in order)
+def format_lines(groups: list[tuple[str, Window | None, Window | None]]) -> str:
+    if not groups:
+        return fmt_line(LABEL, "no quota data")
+    return "\n".join(fmt_line(label, fmt_windows(s, w)) for label, s, w in groups)
 
 
 def extract_token(raw: str) -> str:
@@ -87,13 +80,13 @@ def token_cmd() -> str | None:
 def fetch_line() -> str:
     cmd = token_cmd()
     if not cmd:
-        return LABEL + "n/a (no token command, see README)"
+        return fmt_line(LABEL, "n/a (no token command, see README)")
     try:
         token = extract_token(
             subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=TIMEOUT).stdout
         )
         if not token:
-            return LABEL + "n/a (no token, run agy to log in)"
+            return fmt_line(LABEL, "n/a (no token, run agy to log in)")
         req = urllib.request.Request(
             URL,
             data=b"{}",
@@ -105,15 +98,15 @@ def fetch_line() -> str:
             },
         )
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            return format_line(parse_quota(json.load(r)))
+            return format_lines(parse_summary(json.load(r)))
     except urllib.error.HTTPError as e:
-        return LABEL + f"n/a (HTTP {e.code}, run agy to refresh login)"
+        return fmt_line(LABEL, f"n/a (HTTP {e.code}, run agy to refresh login)")
     except (OSError, ValueError, subprocess.SubprocessError):
-        return LABEL + "n/a (fetch failed)"
+        return fmt_line(LABEL, "n/a (fetch failed)")
 
 
 def antigravity_line(cache: Path = CACHE, now: float | None = None) -> str:
-    """Cached line; refetches at most once per CACHE_TTL, errors included."""
+    """Cached lines; refetches at most once per CACHE_TTL, errors included."""
     now = time.time() if now is None else now
     try:
         c = json.loads(cache.read_text())

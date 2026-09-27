@@ -1,12 +1,17 @@
 # usage-statusline
 
-This project adds two lines to the Claude Code status line. They show your Claude Pro session
-and weekly usage, and your Antigravity (`agy`) quota, each with its reset time.
+This project adds three aligned lines to the Claude Code status line. They show the 5-hour
+session and weekly usage, each with its reset time, for your Claude Pro plan and for each
+Antigravity (`agy`) quota group.
 
 ```
-Claude       session 24% · resets Sun 20:00 | week 41% · resets Thu 21:13
-Antigravity  Flash 25% · resets Sun 15:00 | Pro 3% · resets Mon 01:00
+Claude         session  24% · resets Sun 20:00 | week  41% · resets Thu 21:13
+AG Gemini      session   0% · resets Sun 16:02 | week  14% · resets Mon 23:28
+AG Claude/GPT  session   0% · resets Sun 16:02 | week  19% · resets Sun 00:50
 ```
+
+**AG Gemini** covers Gemini Flash and Pro, which share one quota. **AG Claude/GPT** covers the
+Claude and GPT models in Antigravity.
 
 ## Install
 
@@ -51,6 +56,8 @@ shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
 - The Claude line reads `rate_limits.five_hour` and `rate_limits.seven_day` from the JSON that
   Claude Code sends to the status line. Claude Code provides these fields only for Pro and Max
   plans, and only after the first API response in a session.
-- The Antigravity line calls the `v1internal:fetchAvailableModels` endpoint that `agy` uses. It
-  caches the result, including errors, in `~/.cache/usage-statusline/antigravity.json` for 60
+- The Antigravity lines call the `v1internal:retrieveUserQuotaSummary` endpoint that `agy` uses.
+  It returns one quota group per model family, each with a 5-hour and a weekly bucket. The
+  result, including errors, is cached in `~/.cache/usage-statusline/antigravity.json` for 60
   seconds, with a 2-second timeout.
+- A missing window shows `--` and keeps its width, so the columns stay aligned.

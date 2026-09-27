@@ -6,38 +6,69 @@ import pytest
 
 from usage_statusline import antigravity as ag
 
+# Shape of a real retrieveUserQuotaSummary response (2026-09-27), trimmed.
 RESP = {
-    "models": {
-        "gemini-3.8-flash-high": {
-            "quotaInfo": {"remainingFraction": 0.75, "resetTime": "2026-09-27T18:00:00Z"}
+    "groups": [
+        {
+            "displayName": "Gemini Models",
+            "buckets": [
+                {
+                    "bucketId": "gemini-weekly",
+                    "window": "weekly",
+                    "resetTime": "2026-09-29T02:28:05Z",
+                    "remainingFraction": 0.8551896,
+                },
+                {
+                    "bucketId": "gemini-5h",
+                    "window": "5h",
+                    "resetTime": "2026-09-27T19:00:27Z",
+                    "remainingFraction": 1,
+                },
+            ],
         },
-        "gemini-3.8-flash-low": {
-            "quotaInfo": {"remainingFraction": 0.9, "resetTime": "2026-09-27T18:00:00Z"}
+        {
+            "displayName": "Claude and GPT models",
+            "buckets": [
+                {"bucketId": "3p-weekly", "window": "weekly", "resetTime": "2026-10-04T03:50:20Z"},
+                {
+                    "bucketId": "3p-5h",
+                    "window": "5h",
+                    "resetTime": "2026-09-27T19:00:27Z",
+                    "remainingFraction": 0.75,
+                },
+            ],
         },
-        "gemini-3.1-pro-high": {"quotaInfo": {"resetTime": "2026-09-28T01:00:00Z"}},
-        "claude-opus-4-6-thinking": {"quotaInfo": {"remainingFraction": 1.0}},
-        "gpt-oss-120b-medium": {
-            "quotaInfo": {"remainingFraction": 0.5, "resetTime": "2026-09-27T18:00:00Z"}
-        },
-    }
+        {"displayName": "Future Group", "buckets": [{"bucketId": "new-5h", "window": "5h"}]},
+    ]
 }
 
 
-def test_parse_keeps_most_used_model_per_family() -> None:
-    q = ag.parse_quota(RESP)
-    assert set(q) == {"Flash", "Pro"}  # Claude has no resetTime, GPT-OSS not shown
-    assert q["Flash"][0] == pytest.approx(25)
-    assert q["Pro"][0] == pytest.approx(100)  # missing remainingFraction means exhausted
+def test_parse_summary_one_entry_per_group() -> None:
+    groups = ag.parse_summary(RESP)
+    assert [g[0] for g in groups] == ["AG Gemini", "AG Claude/GPT", "Future Group"]
+    gemini, claude, future = groups
+    assert gemini[1][0] == pytest.approx(0) and gemini[2][0] == pytest.approx(14.48, abs=0.01)
+    assert claude[1][0] == pytest.approx(25)
+    assert claude[2][0] == pytest.approx(100)  # missing remainingFraction means exhausted
+    assert future[1] is None and future[2] is None  # bucket without resetTime is skipped
 
 
-def test_format_line_orders_families() -> None:
-    line = ag.format_line(ag.parse_quota(RESP))
-    assert line.startswith("Antigravity")
-    assert line.index("Flash 25%") < line.index("Pro 100%")
+def test_format_lines_one_line_per_group() -> None:
+    lines = ag.format_lines(ag.parse_summary(RESP)).splitlines()
+    assert len(lines) == 3
+    assert lines[0].startswith("AG Gemini      session   0%")
+    assert "week  14%" in lines[0]
+    assert lines[1].startswith("AG Claude/GPT  session  25%")
+
+
+def test_columns_align_across_lines() -> None:
+    lines = ag.format_lines(ag.parse_summary(RESP)).splitlines()[:2]
+    for mark in ("session", "·", "|", "week"):
+        assert len({line.index(mark) for line in lines}) == 1, mark
 
 
 def test_empty_response() -> None:
-    assert "no quota data" in ag.format_line(ag.parse_quota({}))
+    assert "no quota data" in ag.format_lines(ag.parse_summary({}))
 
 
 def test_no_token_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -60,7 +91,7 @@ def test_fetch_sends_token_and_user_agent(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo ya29.abc")
     monkeypatch.setattr(ag.urllib.request, "urlopen", fake_urlopen)
-    assert "Flash 25%" in ag.fetch_line()
+    assert "AG Claude/GPT  session  25%" in ag.fetch_line()
     assert sent["Authorization"] == "Bearer ya29.abc"
     assert sent["User-agent"] == "antigravity"  # default Python-urllib gets HTTP 403
 
