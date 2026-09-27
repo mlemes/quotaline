@@ -85,7 +85,7 @@ The status line runs the code from your clone, so keep the clone in place.
    them and stops, and you rerun with `./install.sh --agy-entry N`.
 3. Reads that entry once to check that it holds a token. It never prints the token.
 4. Saves `secret-tool lookup <attributes>` to `~/.config/usage-statusline/agy_token_cmd`.
-5. Prints the resulting Antigravity line.
+5. Fetches the Antigravity quota from Google once and prints the resulting line.
 
 The setup needs `secret-tool`. If it's missing, the installer tells you to run
 `sudo apt install libsecret-tools`. To set the command by hand instead, write it to
@@ -115,7 +115,9 @@ shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
   `~/.config/usage-statusline/agy_token_cmd` (the lookup command, not the token),
   `~/.cache/usage-statusline/antigravity.json` (the formatted lines), and the code copy in the
   plugin's data directory.
-- **Sends:** at most one HTTPS request every 60 seconds, a `POST` with body `{}` to
+- **Sends:** one HTTPS request when `/quotaline:install` finishes the Antigravity setup, to
+  show the line, and then at most one every 60 seconds from the status line. Each is a `POST`
+  with body `{}` to
   `https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`, with the
   `agy` token as a Bearer token. The token is a Google OAuth token that Google issued to
   `agy`, and it goes only to Google's own API, the endpoint that `agy` itself calls. It's
@@ -147,8 +149,8 @@ Checks: `MCP_FORWARDS_CREDENTIAL_ENV` on `README.md` and `antigravity.py`.
   cache holds only the formatted percentages and reset times.
 - **`USAGE_STATUSLINE_AGY_TOKEN_CMD`.** An optional override for that saved command. Its value
   is a command, not a token, and the status line runs it without a shell.
-- **When it happens.** Only after you run `/quotaline:install`, which the model can't invoke on
-  its own (`disable-model-invocation: true`). `/quotaline:install --no-agy` skips the keyring
+- **When it happens.** Once when you run `/quotaline:install`, which the model can't invoke on
+  its own (`disable-model-invocation: true`), and then from the status line. `/quotaline:install --no-agy` skips the keyring
   and the network entirely.
 
 ### `install.sh` runs bundled Python
