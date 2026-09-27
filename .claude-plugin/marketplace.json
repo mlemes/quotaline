@@ -6,7 +6,7 @@
     {
       "name": "quotaline",
       "source": "./",
-      "description": "Status line with your Claude Pro and Antigravity session and weekly quota usage, with reset times."
+      "description": "Status line with your Claude Pro and Antigravity session and weekly quota usage, with reset times. Built to pair with antigravity-for-claude-code."
     }
   ]
 }

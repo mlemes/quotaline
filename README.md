@@ -13,6 +13,26 @@ AG Claude/GPT  session   0% · resets Sun 16:02 | week  19% · resets Sun 00:50
 **AG Gemini** covers Gemini Flash and Pro, which share one quota. **AG Claude/GPT** covers the
 Claude and GPT models in Antigravity.
 
+## Use with antigravity-for-claude-code
+
+quotaline was built to pair with the
+[antigravity-for-claude-code](https://github.com/yuting0624/antigravity-for-claude-code)
+plugin. That plugin lets Claude Code hand work off to Antigravity (`agy`), so a single session
+draws on both your Claude and your Antigravity quotas. quotaline shows both quotas side by side,
+which helps you see which one has room left and decide how much work to hand off, before either
+one runs out.
+
+To install both plugins, run:
+
+```bash
+claude plugin marketplace add yuting0624/antigravity-for-claude-code
+claude plugin install antigravity@antigravity-for-claude-code
+claude plugin marketplace add mlemes/quotaline
+claude plugin install quotaline@mlemes
+```
+
+quotaline works on its own as well. It doesn't need the other plugin, and it doesn't call it.
+
 ## Requirements
 
 - Linux with `python3` 3.13 or later. The Antigravity setup also needs `gdbus` and

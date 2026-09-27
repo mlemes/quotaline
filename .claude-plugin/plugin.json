@@ -1,8 +1,8 @@
 {
   "name": "quotaline",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "displayName": "Quotaline",
-  "description": "Status line with your Claude Pro and Antigravity session and weekly quota usage, with reset times.",
+  "description": "Status line with your Claude Pro and Antigravity session and weekly quota usage, with reset times. Built to pair with antigravity-for-claude-code.",
   "author": {
     "name": "Marcus Lemes",
     "url": "https://github.com/mlemes"
@@ -14,6 +14,7 @@
     "statusline",
     "usage",
     "quota",
-    "antigravity"
+    "antigravity",
+    "antigravity-for-claude-code"
   ]
 }
