@@ -77,6 +77,7 @@ flowchart LR
 - Plugin: `/quotaline:install [--no-agy] [--agy-entry N]` and `/quotaline:uninstall`, both `disable-model-invocation: true`.
 
 ## Key decisions
+- 2026-09-27: `PRIVACY.md` states that the author receives no data, lists what's read, stored, and sent (Google for the quota, Anthropic through the Claude Code session), and says how to delete it, at your request, for the plugin directory. Contact is GitHub issues, not an email address.
 - 2026-09-27: The README, manifest, and marketplace entry say quotaline is built to pair with `antigravity-for-claude-code` (github.com/yuting0624/antigravity-for-claude-code), at your request. That plugin delegates Claude Code work to `agy`, and quotaline shows both quotas so you can balance the two. quotaline doesn't depend on it or call it.
 - 2026-09-27: The token command runs without a shell (`shlex.split`, `shell=False`), in both `antigravity.py` and `agy_setup.py`. The directory flagged `shell=True` next to a URL fetch as download-and-execute, and the saved `secret-tool lookup` needs no shell. Custom commands can't use pipes; wrap them in a script.
 - 2026-09-27: The repository has no `CLAUDE.md`, `.claude/`, `docs/TASKS.md`, or template folders (`data/`, `pipelines/`, `explore/`), unlike the workspace template. Plugins don't load a root `CLAUDE.md`, the plugin directory scanned the template's `.claude/skills/` as plugin surfaces, and none of these files help someone who installs the plugin.

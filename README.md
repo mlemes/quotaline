@@ -189,6 +189,11 @@ and makes no network requests.
   seconds, with a 2-second timeout.
 - A missing window shows `--` and keeps its width, so the columns stay aligned.
 
+## Privacy
+
+quotaline sends no data to its author and has no telemetry. [PRIVACY.md](PRIVACY.md) lists what it
+reads, stores, and sends, and how to delete it.
+
 ## License
 
 MIT. See `LICENSE`.
