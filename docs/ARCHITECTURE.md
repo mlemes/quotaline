@@ -14,17 +14,21 @@ flowchart TB
     cc([Claude Code status line JSON on stdin]) --> main["1. Entry point<br/><code>src/usage_statusline/main.py</code>"]
     main --> claude["2. Claude line<br/><code>src/usage_statusline/claude.py</code>"]
     main --> ag["3. Antigravity line<br/><code>src/usage_statusline/antigravity.py</code>"]
-    tok([token command you configure]) --> ag
+    tok([token command in agy_token_cmd]) --> ag
     api([fetchAvailableModels API]) --> ag
     ag <--> cache([~/.cache/usage-statusline/antigravity.json])
     claude --> out([two printed lines])
     ag --> out
-    inst["0. Installer<br/><code>install.sh</code>"] --> settings([~/.claude/settings.json])
+    inst["0a. Installer<br/><code>install.sh</code>"] --> settings([~/.claude/settings.json])
+    inst --> setup["0b. Keyring setup<br/><code>src/usage_statusline/agy_setup.py</code>"]
+    keyring([system keyring via gdbus + secret-tool]) --> setup
+    setup --> tok
 ```
 
 | Stage | Module | Reads | Writes |
 |---|---|---|---|
-| 0. Installer | `install.sh` | `~/.claude/settings.json` | `statusLine` key, one-time `.bak-usage-statusline` backup |
+| 0a. Installer | `install.sh` | `~/.claude/settings.json` | `statusLine` key, one-time `.bak-usage-statusline` backup |
+| 0b. Keyring setup | `src/usage_statusline/agy_setup.py` | keyring labels and attributes, one secret lookup | `~/.config/usage-statusline/agy_token_cmd` |
 | 1. Entry point | `src/usage_statusline/main.py` | stdin JSON | stdout |
 | 2. Claude line | `src/usage_statusline/claude.py` | `rate_limits` in the JSON | one line |
 | 3. Antigravity line | `src/usage_statusline/antigravity.py` | token command, API, cache | cache file, one line |
@@ -43,8 +47,9 @@ flowchart LR
 |---|---|---|
 | `src/usage_statusline/main.py` | Reads stdin and prints both lines | built (2 tests) |
 | `src/usage_statusline/claude.py` | Formats the Claude 5-hour and 7-day windows | built (3 tests) |
-| `src/usage_statusline/antigravity.py` | Gets the token, calls the API, parses the response, and caches the line | built (7 tests), live API response not verified |
-| `install.sh` | Installs or uninstalls the settings entry | built (3 tests) |
+| `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses the response, and caches the line | built (10 tests), live API response not verified |
+| `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (8 tests, fake keyring), not yet run on a real keyring |
+| `install.sh` | Installs or uninstalls the settings entry, then runs `agy_setup` | built (4 tests) |
 
 ### Public API of what is built
 - `claude.claude_line(data: dict) -> str`: never raises on missing fields.
@@ -53,10 +58,13 @@ flowchart LR
 - `antigravity.format_line(quota) -> str`
 - `antigravity.fetch_line() -> str`: makes a network call and never raises. Errors become `n/a (...)` text.
 - `antigravity.antigravity_line(cache: Path = CACHE, now: float | None = None) -> str`: fetches at most once per `CACHE_TTL` (60 s), and caches errors too.
-- `install.sh [--uninstall]`: the `CLAUDE_SETTINGS` env var overrides the settings path, which tests use.
+- `antigravity.extract_token(raw: str) -> str`: accepts a plain token, oauth2 JSON (`access_token`), or `go-keyring-base64:`. Raises `ValueError` on bad JSON or base64.
+- `agy_setup.main(argv, run=sh, which=shutil.which) -> int`: returns 0 when it saves the config, 1 otherwise. `run` takes an argv list and returns stdout, which tests replace with a fake keyring.
+- `install.sh [--uninstall] [--no-agy] [--agy-entry N]`: the `CLAUDE_SETTINGS` env var overrides the settings path. Tests always pass `--no-agy`.
 
 ## Key decisions
-- 2026-09-27: The Antigravity token comes from a command that you configure (`~/.config/usage-statusline/agy_token_cmd` or `USAGE_STATUSLINE_AGY_TOKEN_CMD`). The script never searches the keyring. Claude Code's auto-mode safety check blocks keyring exploration, and this approach keeps credential access under your control.
+- 2026-09-27: `install.sh` finds the agy keyring entry itself (`agy_setup.py`), at your request. It saves `secret-tool lookup <attrs>` rather than the token, so no secret lands on disk, and the status line decodes the raw secret with `extract_token`. It skips "Safe Storage" entries, which hold the IDE's Chromium key. Claude Code's auto mode blocks this work, so it was built in default permission mode and tested only against a fake keyring.
+- 2026-09-27: The Antigravity token comes from a command stored in `~/.config/usage-statusline/agy_token_cmd` or `USAGE_STATUSLINE_AGY_TOKEN_CMD`, not a stored token, because the token expires about hourly and agy refreshes it in the keyring.
 - 2026-09-27: Python stdlib, not bash and `jq`, so the parsing and caching can be tested with pytest. Startup cost is about 30 ms per run.
 - 2026-09-27: `refreshInterval: 60` keeps the Antigravity line current while Claude Code is idle. The cache TTL matches it.
 - 2026-09-27: Errors are cached for the full TTL, so an expired token never makes the status line call the API on every update.

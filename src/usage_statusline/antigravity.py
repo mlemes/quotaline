@@ -4,6 +4,7 @@ The access token comes from a command you configure (see README), because
 agy keeps its OAuth token in the system keyring.
 """
 
+import base64
 import json
 import os
 import subprocess
@@ -58,6 +59,17 @@ def format_line(quota: dict[str, tuple[float, datetime]]) -> str:
     return LABEL + " | ".join(fmt_window(f, *quota[f]) for f in order)
 
 
+def extract_token(raw: str) -> str:
+    """Access token from a keyring secret: plain, oauth2 JSON, or go-keyring base64."""
+    raw = raw.strip()
+    if raw.startswith("go-keyring-base64:"):
+        raw = base64.b64decode(raw.removeprefix("go-keyring-base64:")).decode().strip()
+    if raw.startswith("{"):
+        d = json.loads(raw)
+        return d.get("access_token") or d.get("accessToken") or ""
+    return raw
+
+
 def token_cmd() -> str | None:
     cmd = os.environ.get("USAGE_STATUSLINE_AGY_TOKEN_CMD")
     if cmd:
@@ -72,9 +84,9 @@ def fetch_line() -> str:
     if not cmd:
         return LABEL + "n/a (no token command, see README)"
     try:
-        token = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=TIMEOUT
-        ).stdout.strip()
+        token = extract_token(
+            subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=TIMEOUT).stdout
+        )
         if not token:
             return LABEL + "n/a (no token, run agy to log in)"
         req = urllib.request.Request(

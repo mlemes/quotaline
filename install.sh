@@ -1,12 +1,25 @@
 #!/usr/bin/env bash
-# Install (or --uninstall) the usage status line into Claude Code settings.
+# Install (or --uninstall) the usage status line into Claude Code settings,
+# then find agy's keyring entry for the Antigravity line (skip with --no-agy;
+# pick an entry with --agy-entry N when several match).
 # Idempotent. Backs up the settings file once, before the first change.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
 settings=${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}
 cmd="PYTHONPATH=$here/src python3 -m usage_statusline"
-mode=${1:-install}
+mode=install
+agy=yes
+agy_args=()
+while [ $# -gt 0 ]; do
+  case $1 in
+    --uninstall) mode=--uninstall ;;
+    --no-agy) agy=no ;;
+    --agy-entry) agy_args=(--agy-entry "${2:?--agy-entry needs a number}"); shift ;;
+    *) echo "usage: $0 [--uninstall] [--no-agy] [--agy-entry N]" >&2; exit 2 ;;
+  esac
+  shift
+done
 
 mkdir -p "$(dirname "$settings")"
 [ -f "$settings" ] || echo '{}' >"$settings"
@@ -35,3 +48,7 @@ with open(path, "w") as f:
     json.dump(s, f, indent=2)
     f.write("\n")
 EOF
+
+if [ "$mode" = install ] && [ "$agy" = yes ]; then
+  PYTHONPATH="$here/src" python3 -m usage_statusline.agy_setup "${agy_args[@]}" || true
+fi
