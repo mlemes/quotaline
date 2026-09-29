@@ -42,8 +42,7 @@ flowchart TB
 | 0b. Keyring setup | `src/usage_statusline/agy_setup.py` | keyring labels and attributes, one secret lookup | `~/.config/usage-statusline/agy_token_cmd` |
 | 1. Entry point | `src/usage_statusline/main.py` | stdin JSON | stdout |
 | 2. Claude line | `src/usage_statusline/claude.py` | `rate_limits` in the JSON | one line, plus the shared column layout |
-| 3. Antigravity lines | `src/usage_statusline/codex.py` | Finds the newest Codex `token_count` rate limits and formats one line, with rollover and plan-dependent window labels | built (8 tests), verified on a real free-plan transcript on 2026-09-28 |
-| `src/usage_statusline/antigravity.py` | token command, API, cache | cache file, one line per quota group |
+| 3. Antigravity lines | `src/usage_statusline/antigravity.py` | token command, API, cache | cache file, one line per quota group |
 | 4. Codex line | `src/usage_statusline/codex.py` | last 256 KiB of up to 3 newest `rollout-*.jsonl` | one line, or nothing without `~/.codex/sessions` |
 
 Core structure (one quota group after parsing, rendered with the shared layout):
@@ -59,6 +58,7 @@ flowchart LR
 | Module | Responsibility | Status |
 |---|---|---|
 | `src/usage_statusline/main.py` | Reads stdin and prints the Claude line, the Antigravity lines, then the Codex line if any | built (3 tests in `test_smoke.py`) |
+| `src/usage_statusline/codex.py` | Finds the newest Codex `token_count` rate limits and formats one line, with rollover and plan-dependent window labels | built (8 tests), verified on real free-plan and Go-plan transcripts on 2026-09-28 |
 | `src/usage_statusline/claude.py` | Formats the Claude 5-hour and 7-day windows, and owns the aligned layout shared by all lines | built (4 tests) |
 | `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses quota groups, and caches the lines | built (10 tests), verified live on 2026-09-27 |
 | `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (9 tests), verified on the real keyring on 2026-09-27 |
@@ -86,7 +86,7 @@ flowchart LR
 
 ## Key decisions
 - 2026-09-28: A Codex line reads the `rate_limits` that Codex CLI records in its session transcripts, at your request. It needs no credential, no network request, and no setup step, so it adds nothing for the plugin reviewer to flag. The trade-off is freshness: the numbers date from the last Codex response on this machine. A past reset time shows as `0%` and `--`. The ChatGPT usage endpoint with the token from `~/.codex/auth.json` was rejected because it forwards a credential to an undocumented API.
-- 2026-09-28: Codex windows are placed by `window_minutes`, not by `primary`/`secondary`, because the free plan has one 30-day `primary` window. The second column's label shows the length (`30d`) when it isn't a week, padded to the width of `week`.
+- 2026-09-28: Codex windows are placed by `window_minutes`, not by `primary`/`secondary`, because the free and Go plans have one 30-day `primary` window. The second column's label shows the length (`30d`) when it isn't a week, padded to the width of `week`.
 - 2026-09-27: `PRIVACY.md` states that the author receives no data, lists what's read, stored, and sent (Google for the quota, Anthropic through the Claude Code session), and says how to delete it, at your request, for the plugin directory. Contact is GitHub issues, not an email address.
 - 2026-09-27: The README, manifest, and marketplace entry say quotaline is built to pair with `antigravity-for-claude-code` (github.com/yuting0624/antigravity-for-claude-code), at your request. That plugin delegates Claude Code work to `agy`, and quotaline shows both quotas so you can balance the two. quotaline doesn't depend on it or call it.
 - 2026-09-27: The token command runs without a shell (`shlex.split`, `shell=False`), in both `antigravity.py` and `agy_setup.py`. The directory flagged `shell=True` next to a URL fetch as download-and-execute, and the saved `secret-tool lookup` needs no shell. Custom commands can't use pipes; wrap them in a script.

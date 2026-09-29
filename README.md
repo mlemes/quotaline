@@ -14,7 +14,7 @@ Codex          session   3% · resets Sun 19:40 | week  12% · resets Fri 08:15
 **AG Gemini** covers Gemini Flash and Pro, which share one quota. **AG Claude/GPT** covers the
 Claude and GPT models in Antigravity. **Codex** reads the usage that Codex CLI records on your
 machine (see "How it works"). Its second column reads `week` for a weekly window, or the window
-length, such as `30d` on the free plan's single 30-day window.
+length, such as `30d` on the single 30-day window of the free and Go plans.
 
 quotaline also pairs well with OpenAI's `codex` plugin for Claude Code, which hands work to
 Codex. quotaline shows how much Codex quota is left. It doesn't need that plugin and doesn't

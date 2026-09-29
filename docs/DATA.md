@@ -48,7 +48,7 @@ for reference.
 - Source: Codex CLI writes `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-<time>-<uuid>.jsonl`
   (`CODEX_HOME` defaults to `~/.codex`), one JSON object per line. The status line reads the
   last 256 KiB of up to 3 of the newest files and keeps the last matching event.
-- Verified on 2026-09-28 with Codex CLI 0.158.0, from one `codex exec` run on the free plan.
+- Verified on 2026-09-28 with Codex CLI 0.158.0, from `codex exec` runs on the free plan and, after an upgrade and a fresh `codex login`, on the Go plan.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -57,15 +57,18 @@ for reference.
 | `payload.type` | string | `token_count` |
 | `payload.rate_limits` | object or null | Null events are skipped |
 | `payload.rate_limits.limit_id` | string | `codex`. Other IDs are skipped |
-| `payload.rate_limits.plan_type` | string | `free` measured. Not used |
+| `payload.rate_limits.plan_type` | string | `free` and `go` measured. Not used |
 | `payload.rate_limits.primary`, `.secondary` | object or null | One window each |
 | `<window>.used_percent` | number | 0 to 100 |
-| `<window>.window_minutes` | int | 300 (5 hours) and 10080 (week) on paid plans, 43200 (30 days) on free |
+| `<window>.window_minutes` | int | 300 (5 hours) and 10080 (week) on paid plans, 43200 (30 days) on free and Go |
 | `<window>.resets_at` | int | Unix epoch seconds. Older versions write `resets_in_seconds` instead |
 
 **Quirks:**
-- The free plan has one 30-day `primary` window and a null `secondary`. Measured on
-  2026-09-28: `used_percent` 0.0, `window_minutes` 43200.
+- The free and Go plans each have one 30-day `primary` window and a null `secondary`, with no
+  5-hour window. Measured on 2026-09-28: `used_percent` 0.0, `window_minutes` 43200 on both.
+- After a plan upgrade, Codex keeps logging the old `plan_type` and limits until you run
+  `codex logout` and `codex login`. Measured on 2026-09-28: a run after the upgrade still
+  logged `free`, and the first run after a fresh login logged `go`.
 - A window of 1440 minutes or less goes to the `session` column, and a longer one to the
   second column, labeled `week` or `<days>d`.
 - The numbers are only as fresh as the last Codex response on this machine. A past `resets_at`
