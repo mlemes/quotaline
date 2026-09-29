@@ -1,6 +1,6 @@
 # Privacy policy
 
-Effective date: September 27, 2026
+Effective date: September 28, 2026
 
 This policy covers the quotaline Claude Code plugin and the `usage-statusline` code it runs. The
 author, Marcus Lemes, doesn't operate any server for quotaline and doesn't receive any data from
@@ -21,6 +21,11 @@ Nothing. quotaline has no telemetry, analytics, crash reporting, or update check
 - **The `agy` keyring secret.** It holds an OAuth access token, and it can also hold an ID token
   that contains your Google account name and email. quotaline keeps only the access token and
   discards everything else. It never prints, logs, or saves either token.
+- **Codex session transcripts.** To show the Codex line, quotaline reads the last 256 KiB of up
+  to 3 of the newest files under `~/.codex/sessions/` (or `$CODEX_HOME/sessions/`). It uses only
+  the `rate_limits` field of the last `token_count` event. The rest, which includes your prompts
+  and Codex's replies, is discarded in memory and never stored or sent. quotaline doesn't read
+  `~/.codex/auth.json`, makes no network request for this line, and writes nothing for it.
 
 ## What quotaline stores on your machine
 

@@ -3,6 +3,7 @@ import sys
 
 from usage_statusline.antigravity import antigravity_line
 from usage_statusline.claude import claude_line
+from usage_statusline.codex import codex_line
 
 
 def main() -> None:
@@ -13,3 +14,6 @@ def main() -> None:
         data = {}
     print(claude_line(data))
     print(antigravity_line())
+    codex = codex_line()
+    if codex is not None:
+        print(codex)

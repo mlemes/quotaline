@@ -1,6 +1,6 @@
 # Data dictionary
 
-This project stores no datasets. It reads two JSON inputs, and one more endpoint is recorded
+This project stores no datasets. It reads three JSON inputs, and one more endpoint is recorded
 for reference.
 
 ## Claude Code status line input (stdin)
@@ -43,6 +43,38 @@ for reference.
 - An unused 5-hour window shows `remainingFraction: 1`, and its `resetTime` rolls to about
   5 hours after the request until first use. Measured on 2026-09-27: Gemini weekly 14% used,
   Claude/GPT weekly 19% used.
+
+## Codex session transcript `token_count` event (used)
+- Source: Codex CLI writes `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-<time>-<uuid>.jsonl`
+  (`CODEX_HOME` defaults to `~/.codex`), one JSON object per line. The status line reads the
+  last 256 KiB of up to 3 of the newest files and keeps the last matching event.
+- Verified on 2026-09-28 with Codex CLI 0.158.0, from one `codex exec` run on the free plan.
+
+| Field | Type | Notes |
+|---|---|---|
+| `type` | string | `event_msg` |
+| `timestamp` | string | RFC 3339 UTC. Base for the older `resets_in_seconds` |
+| `payload.type` | string | `token_count` |
+| `payload.rate_limits` | object or null | Null events are skipped |
+| `payload.rate_limits.limit_id` | string | `codex`. Other IDs are skipped |
+| `payload.rate_limits.plan_type` | string | `free` measured. Not used |
+| `payload.rate_limits.primary`, `.secondary` | object or null | One window each |
+| `<window>.used_percent` | number | 0 to 100 |
+| `<window>.window_minutes` | int | 300 (5 hours) and 10080 (week) on paid plans, 43200 (30 days) on free |
+| `<window>.resets_at` | int | Unix epoch seconds. Older versions write `resets_in_seconds` instead |
+
+**Quirks:**
+- The free plan has one 30-day `primary` window and a null `secondary`. Measured on
+  2026-09-28: `used_percent` 0.0, `window_minutes` 43200.
+- A window of 1440 minutes or less goes to the `session` column, and a longer one to the
+  second column, labeled `week` or `<days>d`.
+- The numbers are only as fresh as the last Codex response on this machine. A past `resets_at`
+  means the window has reset since then, so the line shows `0%` and `--`.
+- Before the first Codex run, `~/.codex/sessions/` doesn't exist, and the `threads` table in
+  `~/.codex/state_5.sqlite` is empty. The rollout path is also stored there, in
+  `threads.rollout_path`.
+- Transcripts hold the full prompts and replies, and they can reach several MB. Never read a
+  whole file.
 
 ## Antigravity `fetchAvailableModels` response (reference only, not used)
 - Source: `POST https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels`

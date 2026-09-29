@@ -2,10 +2,11 @@
 
 ## Overview
 Claude Code runs a status line command after each update and every 60 seconds. It sends session
-JSON to the command on stdin. `usage_statusline` prints three aligned lines. The first shows
+JSON to the command on stdin. `usage_statusline` prints up to four aligned lines. The first shows
 Claude Pro 5-hour and 7-day usage from that JSON. The others show one Antigravity (`agy`) quota
 group each (Gemini, and Claude/GPT) with its 5-hour and weekly usage, fetched from Google's Code
-Assist API and cached. `install.sh` wires the command into
+Assist API and cached. The last shows Codex CLI usage, read from the tail of Codex's own session
+transcripts, with no network request. `install.sh` wires the command into
 `~/.claude/settings.json`. The same repository is published as the Claude Code plugin `quotaline`, and it's also its
 own marketplace (`quotaline@mlemes`), whose skills run `install.sh` for you. It's built to pair
 with the `antigravity-for-claude-code` plugin, which hands work off from Claude Code to `agy`, so
@@ -21,8 +22,11 @@ flowchart TB
     tok([token command in agy_token_cmd]) --> ag
     api([retrieveUserQuotaSummary API]) --> ag
     ag <--> cache([~/.cache/usage-statusline/antigravity.json])
-    claude --> out([three aligned lines])
+    claude --> out([up to four aligned lines])
     ag --> out
+    main --> codex["4. Codex line<br/><code>src/usage_statusline/codex.py</code>"]
+    rollout([~/.codex/sessions rollout-*.jsonl tail]) --> codex
+    codex --> out
     inst["0a. Installer<br/><code>install.sh</code>"] --> settings([~/.claude/settings.json])
     inst --> setup["0b. Keyring setup<br/><code>src/usage_statusline/agy_setup.py</code>"]
     keyring([system keyring via gdbus + secret-tool]) --> setup
@@ -38,7 +42,9 @@ flowchart TB
 | 0b. Keyring setup | `src/usage_statusline/agy_setup.py` | keyring labels and attributes, one secret lookup | `~/.config/usage-statusline/agy_token_cmd` |
 | 1. Entry point | `src/usage_statusline/main.py` | stdin JSON | stdout |
 | 2. Claude line | `src/usage_statusline/claude.py` | `rate_limits` in the JSON | one line, plus the shared column layout |
-| 3. Antigravity lines | `src/usage_statusline/antigravity.py` | token command, API, cache | cache file, one line per quota group |
+| 3. Antigravity lines | `src/usage_statusline/codex.py` | Finds the newest Codex `token_count` rate limits and formats one line, with rollover and plan-dependent window labels | built (8 tests), verified on a real free-plan transcript on 2026-09-28 |
+| `src/usage_statusline/antigravity.py` | token command, API, cache | cache file, one line per quota group |
+| 4. Codex line | `src/usage_statusline/codex.py` | last 256 KiB of up to 3 newest `rollout-*.jsonl` | one line, or nothing without `~/.codex/sessions` |
 
 Core structure (one quota group after parsing, rendered with the shared layout):
 
@@ -52,7 +58,7 @@ flowchart LR
 ## Modules
 | Module | Responsibility | Status |
 |---|---|---|
-| `src/usage_statusline/main.py` | Reads stdin and prints the Claude line, then the Antigravity lines | built (2 tests in `test_smoke.py`) |
+| `src/usage_statusline/main.py` | Reads stdin and prints the Claude line, the Antigravity lines, then the Codex line if any | built (3 tests in `test_smoke.py`) |
 | `src/usage_statusline/claude.py` | Formats the Claude 5-hour and 7-day windows, and owns the aligned layout shared by all lines | built (4 tests) |
 | `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses quota groups, and caches the lines | built (10 tests), verified live on 2026-09-27 |
 | `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (9 tests), verified on the real keyring on 2026-09-27 |
@@ -65,7 +71,9 @@ flowchart LR
 - `claude.LABEL_WIDTH = 15`: every line pads its label to this width.
 - `claude.fmt_window(label: str, used_pct: float, resets_at: datetime) -> str`: `"week  41% · resets Thu 09:00"` in local time, percent right-aligned to 3 digits.
 - `claude.fmt_line(label: str, body: str) -> str`: pads the label to `LABEL_WIDTH`.
-- `claude.fmt_windows(session, week) -> str`: each argument is `(used_pct, datetime) | None`. Joins with ` | `. A missing window prints `--` padded to full width.
+- `claude.fmt_windows(session, week, labels=("session", "week")) -> str`: each window is `(used_pct, datetime | None) | None`. Joins with ` | `. A missing window prints `--` padded to full width. A `None` reset time prints `--` padded to the width of a real one (`claude.fmt_reset`).
+- `codex.latest_rate_limits(sessions: Path = SESSIONS) -> dict | None`: the `rate_limits` of the newest `token_count` event with `limit_id` `codex` or missing, each window given an epoch `resets_at` (converted from `resets_in_seconds` if needed). Never reads more than 256 KiB per file.
+- `codex.codex_line(sessions: Path = SESSIONS, now: float | None = None) -> str | None`: `None` when `sessions` isn't a directory, `Codex          no usage yet` when no event is found, otherwise one aligned line. Never raises; errors print `n/a (<ExceptionName>)`. `SESSIONS` is `$CODEX_HOME/sessions`, default `~/.codex/sessions`.
 - `antigravity.parse_summary(resp: dict) -> list[tuple[str, Window | None, Window | None]]`: one `(label, 5h, weekly)` per group in API order, where `Window = (used_pct, reset datetime)`. A missing `remainingFraction` counts as 100% used. Buckets without `resetTime` are skipped. Labels come from `GROUP_LABELS` by `bucketId` prefix, else `displayName`.
 - `antigravity.format_lines(groups) -> str`: one line per group joined by `\n`, or `Antigravity    no quota data`.
 - `antigravity.fetch_line() -> str`: makes a network call and never raises. Errors become a single `Antigravity    n/a (...)` line.
@@ -77,6 +85,8 @@ flowchart LR
 - Plugin: `/quotaline:install [--no-agy] [--agy-entry N]` and `/quotaline:uninstall`, both `disable-model-invocation: true`.
 
 ## Key decisions
+- 2026-09-28: A Codex line reads the `rate_limits` that Codex CLI records in its session transcripts, at your request. It needs no credential, no network request, and no setup step, so it adds nothing for the plugin reviewer to flag. The trade-off is freshness: the numbers date from the last Codex response on this machine. A past reset time shows as `0%` and `--`. The ChatGPT usage endpoint with the token from `~/.codex/auth.json` was rejected because it forwards a credential to an undocumented API.
+- 2026-09-28: Codex windows are placed by `window_minutes`, not by `primary`/`secondary`, because the free plan has one 30-day `primary` window. The second column's label shows the length (`30d`) when it isn't a week, padded to the width of `week`.
 - 2026-09-27: `PRIVACY.md` states that the author receives no data, lists what's read, stored, and sent (Google for the quota, Anthropic through the Claude Code session), and says how to delete it, at your request, for the plugin directory. Contact is GitHub issues, not an email address.
 - 2026-09-27: The README, manifest, and marketplace entry say quotaline is built to pair with `antigravity-for-claude-code` (github.com/yuting0624/antigravity-for-claude-code), at your request. That plugin delegates Claude Code work to `agy`, and quotaline shows both quotas so you can balance the two. quotaline doesn't depend on it or call it.
 - 2026-09-27: The token command runs without a shell (`shlex.split`, `shell=False`), in both `antigravity.py` and `agy_setup.py`. The directory flagged `shell=True` next to a URL fetch as download-and-execute, and the saved `secret-tool lookup` needs no shell. Custom commands can't use pipes; wrap them in a script.
@@ -102,3 +112,4 @@ flowchart LR
 2. `main` parses stdin and treats invalid JSON as `{}`.
 3. `claude_line` formats `rate_limits.five_hour` and `rate_limits.seven_day`, skipping any window that is absent.
 4. `antigravity_line` returns the cached line if it is less than 60 seconds old. Otherwise, it runs the token command, POSTs `{}` to `retrieveUserQuotaSummary`, formats one line per quota group, and writes the cache.
+5. `codex_line` tails the newest Codex transcripts, if `~/.codex/sessions` exists, and formats the last `rate_limits` it finds. It keeps no cache.

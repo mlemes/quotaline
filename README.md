@@ -1,17 +1,24 @@
 # quotaline
 
-This project adds three aligned lines to the Claude Code status line. They show the 5-hour
-session and weekly usage, each with its reset time, for your Claude Pro plan and for each
-Antigravity (`agy`) quota group.
+This project adds four aligned lines to the Claude Code status line. They show the 5-hour
+session and weekly usage, each with its reset time, for your Claude Pro plan, for each
+Antigravity (`agy`) quota group, and for Codex CLI on your ChatGPT plan.
 
 ```
 Claude         session  24% · resets Sun 20:00 | week  41% · resets Thu 21:13
 AG Gemini      session   0% · resets Sun 16:02 | week  14% · resets Mon 23:28
 AG Claude/GPT  session   0% · resets Sun 16:02 | week  19% · resets Sun 00:50
+Codex          session   3% · resets Sun 19:40 | week  12% · resets Fri 08:15
 ```
 
 **AG Gemini** covers Gemini Flash and Pro, which share one quota. **AG Claude/GPT** covers the
-Claude and GPT models in Antigravity.
+Claude and GPT models in Antigravity. **Codex** reads the usage that Codex CLI records on your
+machine (see "How it works"). Its second column reads `week` for a weekly window, or the window
+length, such as `30d` on the free plan's single 30-day window.
+
+quotaline also pairs well with OpenAI's `codex` plugin for Claude Code, which hands work to
+Codex. quotaline shows how much Codex quota is left. It doesn't need that plugin and doesn't
+call it.
 
 ## Use with antigravity-for-claude-code
 
@@ -38,6 +45,7 @@ quotaline works on its own as well. It doesn't need the other plugin, and it doe
 - Linux with `python3` 3.13 or later. The Antigravity setup also needs `gdbus` and
   `secret-tool` (`sudo apt install libsecret-tools`).
 - A Claude Pro or Max plan for the Claude line, and a logged-in `agy` for the Antigravity lines.
+- Optional: Codex CLI, used at least once on this machine, for the Codex line. It needs no setup.
 
 ## Install as a Claude Code plugin
 
@@ -110,7 +118,10 @@ shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
 - **Reads:** the status line JSON that Claude Code sends (for `rate_limits`). During setup, the
   labels and attributes of your keyring entries (through `gdbus`) and the one matching `agy`
   entry (through `secret-tool`). At run time, the saved `secret-tool lookup` command, which
-  returns `agy`'s current OAuth access token. The plugin never prints or stores the token.
+  returns `agy`'s current OAuth access token. The plugin never prints or stores the token. Also
+  the last 256 KiB of up to 3 of the newest Codex session files under `~/.codex/sessions` (or
+  `$CODEX_HOME/sessions`). It uses only the `rate_limits` field of the last `token_count`
+  event. It never reads `~/.codex/auth.json`.
 - **Writes:** the `statusLine` key in `~/.claude/settings.json`, with a one-time backup,
   `~/.config/usage-statusline/agy_token_cmd` (the lookup command, not the token),
   `~/.cache/usage-statusline/antigravity.json` (the formatted lines), and the code copy in the
@@ -187,6 +198,15 @@ and makes no network requests.
   It returns one quota group per model family, each with a 5-hour and a weekly bucket. The
   result, including errors, is cached in `~/.cache/usage-statusline/antigravity.json` for 60
   seconds, with a 2-second timeout.
+- The Codex line reads the session transcripts that Codex CLI writes, at
+  `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. It makes no network request and writes no
+  cache. The numbers are as fresh as your last Codex response on this machine. Usage from Codex
+  on other machines or ChatGPT on the web appears after your next Codex run here. If a window's
+  reset time has passed, the line shows `0%` and `--` for the reset, because the window reset
+  since Codex last ran. If `~/.codex/sessions` doesn't exist, there is no Codex line. If it
+  exists but holds no usage event yet, the line reads `Codex          no usage yet`. Codex's
+  transcript format is internal and undocumented, so it can change between Codex versions. It
+  was verified on Codex CLI 0.158.0.
 - A missing window shows `--` and keeps its width, so the columns stay aligned.
 
 ## Privacy
