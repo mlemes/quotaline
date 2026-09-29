@@ -16,29 +16,32 @@ Claude and GPT models in Antigravity. **Codex** reads the usage that Codex CLI r
 machine (see "How it works"). Its second column reads `week` for a weekly window, or the window
 length, such as `30d` on the single 30-day window of the free and Go plans.
 
-quotaline also pairs well with OpenAI's `codex` plugin for Claude Code, which hands work to
-Codex. quotaline shows how much Codex quota is left. It doesn't need that plugin and doesn't
-call it.
+## Use with antigravity-for-claude-code and the Codex plugin
 
-## Use with antigravity-for-claude-code
+quotaline was built to pair with two plugins that let Claude Code hand work off to another
+agent:
 
-quotaline was built to pair with the
-[antigravity-for-claude-code](https://github.com/yuting0624/antigravity-for-claude-code)
-plugin. That plugin lets Claude Code hand work off to Antigravity (`agy`), so a single session
-draws on both your Claude and your Antigravity quotas. quotaline shows both quotas side by side,
-which helps you see which one has room left and decide how much work to hand off, before either
-one runs out.
+- [antigravity-for-claude-code](https://github.com/yuting0624/antigravity-for-claude-code)
+  hands work to Antigravity (`agy`).
+- OpenAI's [Codex plugin for Claude Code](https://github.com/openai/codex-plugin-cc) hands
+  work to Codex.
 
-To install both plugins, run:
+With either plugin, a single session draws on more than one quota. quotaline shows your Claude,
+Antigravity, and Codex quotas side by side, which helps you see which one has room left and
+decide how much work to hand off, before any of them runs out.
+
+To install quotaline with both plugins, run:
 
 ```bash
 claude plugin marketplace add yuting0624/antigravity-for-claude-code
 claude plugin install antigravity@antigravity-for-claude-code
+claude plugin marketplace add openai/codex-plugin-cc
+claude plugin install codex@openai-codex
 claude plugin marketplace add mlemes/quotaline
 claude plugin install quotaline@mlemes
 ```
 
-quotaline works on its own as well. It doesn't need the other plugin, and it doesn't call it.
+quotaline works on its own as well. It doesn't need either plugin, and it doesn't call them.
 
 ## Requirements
 
@@ -106,7 +109,7 @@ The status line accepts a plain token, oauth2 JSON with `access_token`, or a
 The access token expires about an hour after `agy` last refreshed it. When it expires, the line
 shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
 
-## What this plugin runs, reads, and sends
+## What this plugin runs, reads, writes, and sends
 
 - **Runs:** `install.sh`, only when you run `/quotaline:install` or `/quotaline:uninstall`.
   `install.sh` runs two bundled Python modules, `usage_statusline.settings_entry` (edits

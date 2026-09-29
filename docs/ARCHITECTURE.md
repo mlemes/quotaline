@@ -9,8 +9,8 @@ Assist API and cached. The last shows Codex CLI usage, read from the tail of Cod
 transcripts, with no network request. `install.sh` wires the command into
 `~/.claude/settings.json`. The same repository is published as the Claude Code plugin `quotaline`, and it's also its
 own marketplace (`quotaline@mlemes`), whose skills run `install.sh` for you. It's built to pair
-with the `antigravity-for-claude-code` plugin, which hands work off from Claude Code to `agy`, so
-you can watch and balance both quotas.
+with the `antigravity-for-claude-code` plugin and OpenAI's Codex plugin (`codex-plugin-cc`), which
+hand work off from Claude Code to `agy` and Codex, so you can watch and balance all three quotas.
 
 ## Diagram
 
@@ -58,10 +58,10 @@ flowchart LR
 | Module | Responsibility | Status |
 |---|---|---|
 | `src/usage_statusline/main.py` | Reads stdin and prints the Claude line, the Antigravity lines, then the Codex line if any | built (3 tests in `test_smoke.py`) |
-| `src/usage_statusline/codex.py` | Finds the newest Codex `token_count` rate limits and formats one line, with rollover and plan-dependent window labels | built (8 tests), verified on real free-plan and Go-plan transcripts on 2026-09-28 |
+| `src/usage_statusline/codex.py` | Finds the newest Codex `token_count` rate limits and formats one line, with rollover and plan-dependent window labels | built (9 tests), verified on real free-plan and Go-plan transcripts on 2026-09-28 |
 | `src/usage_statusline/claude.py` | Formats the Claude 5-hour and 7-day windows, and owns the aligned layout shared by all lines | built (4 tests) |
 | `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses quota groups, and caches the lines | built (10 tests), verified live on 2026-09-27 |
-| `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (9 tests), verified on the real keyring on 2026-09-27 |
+| `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (12 tests), verified on the real keyring on 2026-09-27 |
 | `src/usage_statusline/settings_entry.py` | Adds or removes the `statusLine` key in `settings.json`, run by `install.sh` | built (2 tests) |
 | `install.sh` | Installs or uninstalls the settings entry through `settings_entry`, then runs `agy_setup`. With `--dest`, runs from a copy | built (6 tests) |
 | `.claude-plugin/`, `skills/`, `hooks/` | Plugin manifest, `mlemes` marketplace, install and uninstall skills, and the sync hook | built (2 tests in `test_plugin.py`), `claude plugin validate .` passes |
@@ -85,6 +85,7 @@ flowchart LR
 - Plugin: `/quotaline:install [--no-agy] [--agy-entry N]` and `/quotaline:uninstall`, both `disable-model-invocation: true`.
 
 ## Key decisions
+- 2026-09-29: The README section "Use with antigravity-for-claude-code and the Codex plugin", the manifest, and the marketplace entry also name OpenAI's Codex plugin (github.com/openai/codex-plugin-cc, installed as `codex@openai-codex`), at your request, now that quotaline has a Codex line. The version stays 0.2.0 because only docs changed. quotaline doesn't depend on either plugin or call it.
 - 2026-09-28: A Codex line reads the `rate_limits` that Codex CLI records in its session transcripts, at your request. It needs no credential, no network request, and no setup step, so it adds nothing for the plugin reviewer to flag. The trade-off is freshness: the numbers date from the last Codex response on this machine. A past reset time shows as `0%` and `--`. The ChatGPT usage endpoint with the token from `~/.codex/auth.json` was rejected because it forwards a credential to an undocumented API.
 - 2026-09-28: Codex windows are placed by `window_minutes`, not by `primary`/`secondary`, because the free and Go plans have one 30-day `primary` window. The second column's label shows the length (`30d`) when it isn't a week, padded to the width of `week`.
 - 2026-09-27: `PRIVACY.md` states that the author receives no data, lists what's read, stored, and sent (Google for the quota, Anthropic through the Claude Code session), and says how to delete it, at your request, for the plugin directory. Contact is GitHub issues, not an email address.

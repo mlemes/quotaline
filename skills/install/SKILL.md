@@ -1,6 +1,6 @@
 ---
 name: install
-description: Install the usage status line, which shows Claude Pro and Antigravity session and weekly quota usage, in your Claude Code settings.
+description: Install the usage status line, which shows Claude Pro, Antigravity, and Codex session and weekly quota usage, in your Claude Code settings.
 disable-model-invocation: true
 argument-hint: "[--no-agy] [--agy-entry N]"
 ---

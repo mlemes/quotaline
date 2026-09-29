@@ -2,7 +2,7 @@
   "name": "quotaline",
   "version": "0.2.0",
   "displayName": "Quotaline",
-  "description": "Status line with your Claude Pro, Antigravity, and Codex session and weekly quota usage, with reset times. Built to pair with antigravity-for-claude-code.",
+  "description": "Status line with your Claude Pro, Antigravity, and Codex session and weekly quota usage, with reset times. Built to pair with antigravity-for-claude-code and OpenAI's Codex plugin.",
   "author": {
     "name": "Marcus Lemes",
     "url": "https://github.com/mlemes"
