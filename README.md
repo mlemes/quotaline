@@ -1,8 +1,8 @@
 # quotaline
 
-This project adds four aligned lines to the Claude Code status line. They show the 5-hour
-session and weekly usage, each with its reset time, for your Claude Pro plan, for each
-Antigravity (`agy`) quota group, and for Codex CLI on your ChatGPT plan.
+This project adds quota lines to the Claude Code status line for your Claude Pro plan,
+Antigravity (`agy`), and Codex CLI on your ChatGPT plan. It shows session and weekly windows
+when provided, with model quota fallback for Gemini.
 
 ```
 Claude         session  24% · resets Sun 20:00 | week  41% · resets Thu 21:13
@@ -11,8 +11,9 @@ AG Claude/GPT  session   0% · resets Sun 16:02 | week  19% · resets Sun 00:50
 Codex          session   3% · resets Sun 19:40 | week  12% · resets Fri 08:15
 ```
 
-**AG Gemini** covers Gemini Flash and Pro, which share one quota. **AG Claude/GPT** covers the
-Claude and GPT models in Antigravity. **Codex** reads the usage that Codex CLI records on your
+**AG Gemini** covers Gemini models when their reported quotas match; differing model quotas
+get separate rows. If Google omits the Gemini summary, its row shows `quota` with one reset
+time and no weekly value. **AG Claude/GPT** covers Claude and GPT models in Antigravity. **Codex** reads the usage that Codex CLI records on your
 machine (see "How it works"). Its second column reads `week` for a weekly window, or the window
 length, such as `30d` on the single 30-day window of the free and Go plans.
 
@@ -106,8 +107,17 @@ don't work. Wrap anything more complex in a script and save the script's path.
 The status line accepts a plain token, oauth2 JSON with `access_token`, or a
 `go-keyring-base64:` value.
 
-The access token expires about an hour after `agy` last refreshed it. When it expires, the line
-shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
+The access token expires about an hour after `agy` last refreshed it. On HTTP 401, quotaline
+runs `agy models` once without a shell or interactive input, then rereads the keyring token and
+retries. This lets `agy` own credential refresh without an open session. The subprocess has a
+10-second limit and its process group is terminated afterward. Its output is discarded; `agy`
+may write its normal logs/state, initialize its configured plugins, and make its own network
+requests. No model prompt is submitted. If `agy` is missing, login was revoked, or refresh fails,
+the line reports the failure. HTTP 403 does not trigger a refresh.
+
+When a fetch fails, last successful quota rows remain visible with `stale (updated …)` and the
+error. Stale values are historical, even after their reset times pass. Retries are throttled to
+once per 60 seconds when the cache is writable. A cache write failure does not hide fresh usage.
 
 ## What this plugin runs, reads, writes, and sends
 
@@ -117,7 +127,7 @@ shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
   SessionStart hook runs `install.sh --sync`, which copies the plugin's Python code into its data
   directory, and only if you already installed. The status line runs
   `python3 -m usage_statusline` from that copy. Nothing is downloaded or installed from a
-  package registry.
+  package registry. On HTTP 401, it also runs bounded `agy models` as described above.
 - **Reads:** the status line JSON that Claude Code sends (for `rate_limits`). During setup, the
   labels and attributes of your keyring entries (through `gdbus`) and the one matching `agy`
   entry (through `secret-tool`). At run time, the saved `secret-tool lookup` command, which
@@ -127,17 +137,17 @@ shows `n/a (HTTP 401, run agy to refresh login)` until you use `agy` again.
   event. It never reads `~/.codex/auth.json`.
 - **Writes:** the `statusLine` key in `~/.claude/settings.json`, with a one-time backup,
   `~/.config/usage-statusline/agy_token_cmd` (the lookup command, not the token),
-  `~/.cache/usage-statusline/antigravity.json` (the formatted lines), and the code copy in the
+  `~/.cache/usage-statusline/antigravity.json` (formatted lines, successful rows and timestamps),
+  temporary files beside that cache for atomic replacement, and the code copy in the
   plugin's data directory.
-- **Sends:** one HTTPS request when `/quotaline:install` finishes the Antigravity setup, to
-  show the line, and then at most one every 60 seconds from the status line. Each is a `POST`
-  with body `{}` to
-  `https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`, with the
-  `agy` token as a Bearer token. The token is a Google OAuth token that Google issued to
-  `agy`, and it goes only to Google's own API, the endpoint that `agy` itself calls. It's
-  internal and undocumented, so it can change without notice. Without the Antigravity setup,
-  the plugin makes no network requests. There's no telemetry, and nothing else leaves your
-  machine.
+- **Sends:** quota requests during Antigravity setup and then at most one fetch cycle every
+  60 seconds when the cache is writable. A cycle calls
+  `https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary` and, when
+  Gemini is absent, `v1internal:fetchAvailableModels` on the same host. Both use `POST`, body
+  `{}`, `User-Agent: antigravity`, and the `agy` Google access token as a Bearer token. An
+  HTTP 401 can trigger one `agy models` refresh and one retry of the failed request. These
+  internal APIs can change without notice. Without a token command, no requests or refresh
+  subprocesses run. quotaline has no telemetry; `agy` retains its own network/state behavior.
 
 ## Notes for reviewers
 
@@ -152,8 +162,8 @@ Checks: `MCP_FORWARDS_CREDENTIAL_ENV` on `README.md` and `antigravity.py`.
 - **What the credential is.** The OAuth access token that the Antigravity CLI (`agy`) keeps in
   the system keyring (`service=gemini`, `username=antigravity`). Google issues it.
 - **Where it goes.** Only to `daily-cloudcode-pa.googleapis.com`, Google's Cloud Code API. The
-  host is the token's own issuer and audience, and it's the same endpoint `agy` calls for the
-  same data. `antigravity.fetch_line` builds the only request in the plugin.
+  host serves the quota endpoints that `agy` also uses. `antigravity.fetch_line` builds
+  these requests. The plugin itself never sends refresh credentials; `agy` owns refresh.
 - **Why not `user_config`.** The access token expires about one hour after `agy` refreshes it,
   and only `agy` holds the refresh credentials. A value you paste once would stop working
   within the hour. Reading the current token from the keyring at run time is the only way the
@@ -181,9 +191,12 @@ downloads, and the Python code uses only the standard library.
 
 Check: `RUNTIME_FETCH_EXEC` on `antigravity.py`.
 
-The only process `antigravity.py` starts is the saved token command, which runs before the
-request, without a shell (`shlex.split`, `shell=False`). The response is parsed with
-`json.load` into percentages and times, and nothing from it is run or written as code.
+`antigravity.py` starts the saved token command without a shell (`shlex.split`, `shell=False`).
+On HTTP 401 it can also run the installed `agy models` command once, with no stdin, discarded
+output, a 10-second timeout, and process-group cleanup. It rereads the token after successful
+refresh. This delegates credential handling to `agy`; quotaline does not implement OAuth or
+write the keyring. API responses are parsed with `json.load` into percentages and times;
+nothing from them is run or written as code.
 
 ### The SessionStart hook passes `${CLAUDE_PLUGIN_DATA}`
 
@@ -198,9 +211,14 @@ and makes no network requests.
   Claude Code sends to the status line. Claude Code provides these fields only for Pro and Max
   plans, and only after the first API response in a session.
 - The Antigravity lines call the `v1internal:retrieveUserQuotaSummary` endpoint that `agy` uses.
-  It returns one quota group per model family, each with a 5-hour and a weekly bucket. The
-  result, including errors, is cached in `~/.cache/usage-statusline/antigravity.json` for 60
-  seconds, with a 2-second timeout.
+  It supplies explicit 5-hour and weekly buckets. Some accounts now omit Gemini, so the line
+  supplements it with `v1internal:fetchAvailableModels`. Identical Gemini quota/reset pairs
+  share a row; differing quotas keep their model labels. Model-level data is labeled `quota`,
+  without inventing a weekly window. Missing model fractions remain unknown. Requests and
+  token lookups have a 2-second timeout each; credential recovery additionally allows up to
+  10 seconds for `agy models`. The cache preserves successful rows during partial failures,
+  marks historical rows stale, and throttles retries for 60 seconds. Cache files from 0.2.0
+  remain readable.
 - The Codex line reads the session transcripts that Codex CLI writes, at
   `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. It makes no network request and writes no
   cache. The numbers are as fresh as your last Codex response on this machine. Usage from Codex

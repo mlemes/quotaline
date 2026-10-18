@@ -1,11 +1,21 @@
 # Architecture
 
+## Antigravity reliability update (0.2.1)
+
+`antigravity.py` retains the summary endpoint and supplements absent Gemini groups with
+`fetchAvailableModels` on the same host. Model data uses a generic quota label, since it
+provides no weekly window. HTTP 401 permits one bounded, non-interactive `agy models` attempt;
+`agy` retains OAuth/keyring ownership. Cache writes are atomic and optional; successful rows
+survive failures with observation timestamps and stale markers. `main.py` isolates Antigravity
+exceptions so Codex still renders. Installer, hook, skills and module entry points are unchanged.
+The original API reference and historical verification notes below describe 0.2.0 unless noted.
+
 ## Overview
 Claude Code runs a status line command after each update and every 60 seconds. It sends session
-JSON to the command on stdin. `usage_statusline` prints up to four aligned lines. The first shows
+JSON to the command on stdin. `usage_statusline` prints provider quota lines. The first shows
 Claude Pro 5-hour and 7-day usage from that JSON. The others show one Antigravity (`agy`) quota
 group each (Gemini, and Claude/GPT) with its 5-hour and weekly usage, fetched from Google's Code
-Assist API and cached. The last shows Codex CLI usage, read from the tail of Codex's own session
+Assist API and cached; Gemini model fallback can add separate quota rows. The last shows Codex CLI usage, read from the tail of Codex's own session
 transcripts, with no network request. `install.sh` wires the command into
 `~/.claude/settings.json`. The same repository is published as the Claude Code plugin `quotaline`, and it's also its
 own marketplace (`quotaline@mlemes`), whose skills run `install.sh` for you. It's built to pair
@@ -20,9 +30,10 @@ flowchart TB
     main --> claude["2. Claude line<br/><code>src/usage_statusline/claude.py</code>"]
     main --> ag["3. Antigravity lines<br/><code>src/usage_statusline/antigravity.py</code>"]
     tok([token command in agy_token_cmd]) --> ag
-    api([retrieveUserQuotaSummary API]) --> ag
+    api([retrieveUserQuotaSummary + fetchAvailableModels]) --> ag
+    ag --> refresh["agy models on HTTP 401: bounded credential refresh"]
     ag <--> cache([~/.cache/usage-statusline/antigravity.json])
-    claude --> out([up to four aligned lines])
+    claude --> out([provider quota lines])
     ag --> out
     main --> codex["4. Codex line<br/><code>src/usage_statusline/codex.py</code>"]
     rollout([~/.codex/sessions rollout-*.jsonl tail]) --> codex

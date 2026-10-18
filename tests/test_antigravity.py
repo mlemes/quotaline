@@ -128,3 +128,257 @@ def test_corrupt_cache_refetches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     cache = tmp_path / "antigravity.json"
     cache.write_text("not json")
     assert ag.antigravity_line(cache, now=0) == "Antigravity  y"
+
+
+MODELS = {
+    "models": {
+        "gemini-flash": {
+            "displayName": "Gemini Flash",
+            "quotaInfo": {"remainingFraction": 0.75, "resetTime": "2026-10-18T05:22:59Z"},
+        },
+        "gemini-pro": {
+            "displayName": "Gemini Pro",
+            "quotaInfo": {"remainingFraction": 0.75, "resetTime": "2026-10-18T05:22:59Z"},
+        },
+    }
+}
+
+
+def test_missing_gemini_uses_model_quota(monkeypatch):
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo test-token")
+
+    def respond(req, timeout):
+        body = (
+            MODELS
+            if req.full_url.endswith("fetchAvailableModels")
+            else {"groups": [RESP["groups"][1]]}
+        )
+        return io.BytesIO(json.dumps(body).encode())
+
+    monkeypatch.setattr(ag.urllib.request, "urlopen", respond)
+    lines = ag.fetch_line().splitlines()
+    assert len(lines) == 2
+    assert "AG Claude/GPT" in lines[0]
+    assert "AG Gemini" in lines[1] and "quota  25%" in lines[1]
+    assert "week" not in lines[1]
+
+
+def test_model_quota_missing_is_unknown():
+    assert ag.parse_models({"models": {"gemini": {"displayName": "Gemini"}}}) == []
+
+
+def test_distinct_model_quotas_stay_distinct():
+    models = json.loads(json.dumps(MODELS))
+    models["models"]["gemini-pro"]["quotaInfo"]["remainingFraction"] = 0.5
+    lines = ag.parse_models(models)
+    assert len(lines) == 2
+    assert "Gemini Flash" in lines[0] and "25%" in lines[0]
+    assert "Gemini Pro" in lines[1] and "50%" in lines[1]
+
+
+def test_401_refreshes_with_agy_once(monkeypatch):
+    import urllib.error
+
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo test-token")
+    attempts = []
+
+    def respond(req, timeout):
+        attempts.append(req)
+        if len(attempts) == 1:
+            raise urllib.error.HTTPError(req.full_url, 401, "expired", {}, None)
+        return io.BytesIO(json.dumps(RESP).encode())
+
+    refreshed = []
+    monkeypatch.setattr(ag, "refresh_login", lambda: refreshed.append(True) or True, raising=False)
+    monkeypatch.setattr(ag.urllib.request, "urlopen", respond)
+    assert "AG Gemini" in ag.fetch_line()
+    assert refreshed == [True]
+    assert len(attempts) == 2
+
+
+def test_last_success_survives_fetch_error(monkeypatch, tmp_path):
+    cache = tmp_path / "cache.json"
+    good = ag.format_lines(ag.parse_summary(RESP))
+    monkeypatch.setattr(ag, "fetch_line", lambda: good)
+    ag.antigravity_line(cache, now=1000)
+    monkeypatch.setattr(ag, "fetch_line", lambda: "Antigravity    n/a (HTTP 401)")
+    line = ag.antigravity_line(cache, now=1060)
+    assert "AG Gemini" in line and "stale" in line and "HTTP 401" in line
+    assert "stale" in ag.antigravity_line(cache, now=1061)
+
+
+def test_partial_fetch_preserves_missing_group(monkeypatch, tmp_path):
+    cache = tmp_path / "cache.json"
+    monkeypatch.setattr(ag, "fetch_line", lambda: ag.format_lines(ag.parse_summary(RESP)))
+    ag.antigravity_line(cache, now=1000)
+    monkeypatch.setattr(
+        ag,
+        "fetch_line",
+        lambda: (
+            ag.format_lines(ag.parse_summary({"groups": [RESP["groups"][1]]}))
+            + "\nAG Gemini      n/a (fetch failed)"
+        ),
+    )
+    line = ag.antigravity_line(cache, now=1060)
+    assert "AG Gemini      session" in line and "stale" in line
+    claude = next(row for row in line.splitlines() if row.startswith("AG Claude"))
+    assert "stale" not in claude
+
+
+@pytest.mark.parametrize("contents", ["null", "[]", '{"fetched_at":"bad","line":1}'])
+def test_wrong_cache_shape_refetches(monkeypatch, tmp_path, contents):
+    cache = tmp_path / "cache.json"
+    cache.write_text(contents)
+    monkeypatch.setattr(ag, "fetch_line", lambda: "Antigravity  y")
+    assert ag.antigravity_line(cache, now=1000) == "Antigravity  y"
+
+
+def test_cache_write_failure_keeps_fresh_output(monkeypatch, tmp_path):
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("")
+    monkeypatch.setattr(ag, "fetch_line", lambda: "Antigravity  y")
+    assert ag.antigravity_line(blocker / "cache.json", now=1000) == "Antigravity  y"
+
+
+def test_model_endpoint_failure_keeps_summary(monkeypatch):
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo test-token")
+
+    def respond(req, timeout):
+        if req.full_url.endswith("fetchAvailableModels"):
+            raise OSError("offline")
+        return io.BytesIO(json.dumps({"groups": [RESP["groups"][1]]}).encode())
+
+    monkeypatch.setattr(ag.urllib.request, "urlopen", respond)
+    result = ag.fetch_line()
+    assert "AG Claude/GPT  session  25%" in result
+    assert "AG Gemini" in result and "fetch failed" in result
+
+
+def test_summary_endpoint_failure_still_fetches_gemini(monkeypatch):
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo test-token")
+
+    def respond(req, timeout):
+        if req.full_url.endswith("retrieveUserQuotaSummary"):
+            raise OSError("offline")
+        return io.BytesIO(json.dumps(MODELS).encode())
+
+    monkeypatch.setattr(ag.urllib.request, "urlopen", respond)
+    assert "AG Gemini      quota  25%" in ag.fetch_line()
+
+
+@pytest.mark.parametrize("code,refresh_count", [(401, 1), (403, 0)])
+def test_auth_failure_refresh_is_bounded(monkeypatch, code, refresh_count):
+    import urllib.error
+
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo test-token")
+
+    def respond(req, timeout):
+        raise urllib.error.HTTPError(req.full_url, code, "denied", {}, None)
+
+    refreshed = []
+    monkeypatch.setattr(ag.urllib.request, "urlopen", respond)
+    monkeypatch.setattr(ag, "refresh_login", lambda: refreshed.append(True) or True)
+    assert f"HTTP {code}" in ag.fetch_line()
+    assert len(refreshed) == refresh_count
+
+
+def test_401_rereads_refreshed_token(monkeypatch):
+    import urllib.error
+    from subprocess import CompletedProcess
+
+    tokens = iter(["old-token", "new-token"])
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "token-reader")
+    monkeypatch.setattr(
+        ag.subprocess, "run", lambda *a, **kw: CompletedProcess(a, 0, stdout=next(tokens))
+    )
+
+    def respond(req, timeout):
+        if req.headers["Authorization"] == "Bearer old-token":
+            raise urllib.error.HTTPError(req.full_url, 401, "expired", {}, None)
+        assert req.headers["Authorization"] == "Bearer new-token"
+        return io.BytesIO(json.dumps(RESP).encode())
+
+    monkeypatch.setattr(ag, "refresh_login", lambda: True)
+    monkeypatch.setattr(ag.urllib.request, "urlopen", respond)
+    assert "AG Gemini" in ag.fetch_line()
+
+
+def test_refresh_timeout_is_bounded(monkeypatch, tmp_path):
+    executable = tmp_path / "agy"
+    executable.write_text("#!/bin/sh\nsleep 60\n")
+    executable.chmod(0o700)
+    monkeypatch.setattr(ag.shutil, "which", lambda name: str(executable))
+    monkeypatch.setattr(ag, "REFRESH_TIMEOUT", 0.05)
+    assert ag.refresh_login() is False
+
+
+def test_refresh_missing_agy(monkeypatch):
+    monkeypatch.setattr(ag.shutil, "which", lambda name: None)
+    assert ag.refresh_login() is False
+
+
+@pytest.mark.parametrize("body", [None, [], {"models": []}, {"models": {"gemini": None}}])
+def test_malformed_model_response_keeps_summary(monkeypatch, body):
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo test-token")
+
+    def respond(req, timeout):
+        data = (
+            body
+            if req.full_url.endswith("fetchAvailableModels")
+            else {"groups": [RESP["groups"][1]]}
+        )
+        return io.BytesIO(json.dumps(data).encode())
+
+    monkeypatch.setattr(ag.urllib.request, "urlopen", respond)
+    result = ag.fetch_line()
+    assert "AG Claude/GPT" in result and "AG Gemini" in result
+
+
+def test_legacy_cache_preserves_success_on_error(monkeypatch, tmp_path):
+    cache = tmp_path / "cache.json"
+    cache.write_text(json.dumps({"fetched_at": 1000, "line": "AG Gemini      quota  25%"}))
+    monkeypatch.setattr(ag, "fetch_line", lambda: "Antigravity    n/a (HTTP 401)")
+    result = ag.antigravity_line(cache, now=1060)
+    assert "AG Gemini      quota  25%" in result and "stale" in result
+
+
+def test_cache_replace_failure_leaves_old_cache(monkeypatch, tmp_path):
+    cache = tmp_path / "cache.json"
+    original = json.dumps({"fetched_at": 1000, "line": "old"})
+    cache.write_text(original)
+
+    def denied(*args):
+        raise PermissionError("read-only")
+
+    monkeypatch.setattr(Path, "replace", denied)
+    monkeypatch.setattr(ag, "fetch_line", lambda: "Antigravity  y")
+    assert ag.antigravity_line(cache, now=1060) == "Antigravity  y"
+    assert cache.read_text() == original
+    assert list(tmp_path.iterdir()) == [cache]
+
+
+def test_token_reread_timeout_keeps_summary(monkeypatch):
+    import subprocess
+    import urllib.error
+
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo test-token")
+    runs = 0
+
+    def token(*args, **kwargs):
+        nonlocal runs
+        runs += 1
+        if runs > 1:
+            raise subprocess.TimeoutExpired("token-reader", 2)
+        return subprocess.CompletedProcess(args, 0, stdout="test-token")
+
+    def respond(req, timeout):
+        if req.full_url.endswith("fetchAvailableModels"):
+            raise urllib.error.HTTPError(req.full_url, 401, "expired", {}, None)
+        return io.BytesIO(json.dumps({"groups": [RESP["groups"][1]]}).encode())
+
+    monkeypatch.setattr(ag.subprocess, "run", token)
+    monkeypatch.setattr(ag, "refresh_login", lambda: True)
+    monkeypatch.setattr(ag.urllib.request, "urlopen", respond)
+    result = ag.fetch_line()
+    assert "AG Claude/GPT  session  25%" in result
+    assert "AG Gemini" in result and "fetch failed" in result

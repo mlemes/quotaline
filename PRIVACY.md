@@ -1,6 +1,6 @@
 # Privacy policy
 
-Effective date: September 28, 2026
+Effective date: October 17, 2026
 
 This policy covers the quotaline Claude Code plugin and the `usage-statusline` code it runs. The
 author, Marcus Lemes, doesn't operate any server for quotaline and doesn't receive any data from
@@ -37,25 +37,33 @@ quotaline writes only these files, all on your machine:
   token, built from the keyring entry's attributes. For `agy`'s own entry, the attributes are
   `service=gemini` and `username=antigravity`. If you pick a different entry, the command holds
   that entry's attributes, which can include an email address.
-- `~/.cache/usage-statusline/antigravity.json`: the formatted quota percentages and reset times.
+- `~/.cache/usage-statusline/antigravity.json`: formatted quota percentages, reset times,
+  successful rows and observation timestamps. Temporary sibling files allow atomic replacement.
 - A copy of the plugin's code in the plugin's data directory, under `~/.claude/plugins/data/`.
 
 ## What quotaline sends, and to whom
 
-- **Google.** When you set up the Antigravity line, quotaline sends the `agy` access token to
-  `daily-cloudcode-pa.googleapis.com`, Google's API, which issued the token. The request body
-  is empty (`{}`), and the response contains your quota percentages and reset times. quotaline
-  makes this request once during `/quotaline:install`, and then at most once every 60 seconds
-  from the status line. Google handles this request under its own
-  [privacy policy](https://policies.google.com/privacy). If you install with `--no-agy` and
-  have no saved token command, quotaline sends nothing.
+- **Google.** When Antigravity is configured, quotaline sends its `agy` access token to
+  `daily-cloudcode-pa.googleapis.com` for `retrieveUserQuotaSummary` and, when Gemini is
+  missing, `fetchAvailableModels`. Both requests have body `{}` and return quota/model data.
+  It runs one fetch cycle during setup and then at most once per 60 seconds when the cache is
+  writable. An HTTP 401 permits one refresh attempt and one retry of the failed request.
+  Google handles requests under its [privacy policy](https://policies.google.com/privacy).
+  Without a saved or environment-configured token command, no requests are made.
+- **Credential recovery through agy.** On HTTP 401, quotaline can invoke the installed
+  `agy models` command without interactive input. It discards command output, bounds runtime
+  to 10 seconds, and terminates its process group afterward. `agy` owns refresh credentials
+  and any keyring updates; quotaline never stores or sends refresh tokens itself. `agy` may
+  initialize configured plugins, write its normal logs/state, and make its own authentication,
+  model-listing or startup requests. Its behavior and privacy settings remain those of `agy`.
 - **Anthropic, through Claude Code.** `/quotaline:install` and `/quotaline:uninstall` run in
   your Claude Code session, so their output becomes part of that session. That output includes
   the setup messages and the quota lines. If several keyring entries match during setup, it also
   includes their labels and attributes. Claude Code handles your session under Anthropic's
   terms and privacy policy.
 
-quotaline sends nothing else to anyone.
+quotaline itself sends nothing else to anyone. The delegated `agy` command retains its own
+network and storage behavior, as described above.
 
 ## Delete your data
 

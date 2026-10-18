@@ -1,7 +1,6 @@
 # Data dictionary
 
-This project stores no datasets. It reads three JSON inputs, and one more endpoint is recorded
-for reference.
+This project stores no datasets. It reads Claude/Codex JSON and two Google quota endpoints.
 
 ## Claude Code status line input (stdin)
 - Source: Claude Code sends this JSON on each status line run. See https://code.claude.com/docs/en/statusline.
@@ -36,7 +35,8 @@ for reference.
 | `description` | string | Top-level: "Within each group, models share a weekly limit and a 5-hour limit..." |
 
 **Quirks:**
-- Gemini Flash and Pro share one quota group. They are not tracked separately.
+- Gemini Flash and Pro shared one summary group in September. On October 17, 2026, this
+  account returned only the Claude/GPT summary group; missing Gemini triggers model fallback.
 - Adding a `metadata` field to the request body returns HTTP 400. Send `{}`.
 - The status line labels groups by the `bucketId` prefix (`gemini`, `3p`) and falls back to
   `displayName` for unknown groups.
@@ -79,7 +79,7 @@ for reference.
 - Transcripts hold the full prompts and replies, and they can reach several MB. Never read a
   whole file.
 
-## Antigravity `fetchAvailableModels` response (reference only, not used)
+## Antigravity `fetchAvailableModels` response (used when Gemini summary is absent)
 - Source: `POST https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels`
   with a Bearer token. `agy` calls this endpoint, as seen in `~/.gemini/antigravity-cli/cli.log`
   on 2026-09-27.
@@ -96,7 +96,9 @@ for reference.
   returns HTTP 403 even with a valid token. `User-Agent: antigravity` works.
 - An unused model shows `remainingFraction: 1` and a `resetTime` about 5 hours after the
   request, so the window rolls forward until first use. The endpoint shows no weekly window,
-  which is why the status line uses `retrieveUserQuotaSummary` instead.
+  so the fallback displays `quota` and a reset time without claiming a weekly window.
+  Gemini entries with identical fractions and reset times share one row; distinct values
+  retain model names. Missing model fractions remain unknown, rather than implying zero usage.
 - `v1internal:retrieveUserQuota` also works. It returns `{"buckets": [{"modelId",
   "remainingFraction", "resetTime", "tokenType": "WTUS"}]}`, including some internal
   `chat_NNNNN` IDs without `resetTime`.
@@ -109,3 +111,13 @@ for reference.
   `{"auth_method": "consumer", "id_token", "token": {"access_token", "expiry",
   "refresh_token", "token_type"}}`. The access token lasts about one hour, and only `agy`
   refreshes it.
+
+## Antigravity cache
+
+`~/.cache/usage-statusline/antigravity.json` stores `fetched_at` (last attempt epoch seconds),
+`line` (rendered output), and `successful` (label to `[formatted row, observation epoch]`).
+Legacy `fetched_at`/`line` caches remain readable. Successful rows survive failed cycles;
+historical rows display their observation timestamp and a stale marker. Writes replace the
+file atomically. Storage failures do not prevent rendering, but disable the persistent throttle.
+On HTTP 401, one bounded `agy models` invocation owns credential refresh before the plugin
+rereads the token. No token, account identifier or raw model response is cached.
