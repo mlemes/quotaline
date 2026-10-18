@@ -45,7 +45,12 @@ def parse_summary(resp: dict) -> list[tuple[str, Window | None, Window | None]]:
         windows: dict[str, Window] = {}
         for b in buckets:
             if b.get("window") in ("5h", "weekly") and b.get("resetTime"):
-                used = 100 * (1 - b.get("remainingFraction", 0))  # missing means exhausted
+                fraction = b.get("remainingFraction", 0)  # missing means exhausted
+                if not isinstance(fraction, (int, float)) or isinstance(fraction, bool):
+                    continue
+                if not math.isfinite(fraction) or not 0 <= fraction <= 1:
+                    continue
+                used = 100 * (1 - fraction)
                 reset = datetime.fromisoformat(b["resetTime"].replace("Z", "+00:00"))
                 windows[b["window"]] = (used, reset)
         prefix = (buckets[0].get("bucketId", "") if buckets else "").split("-")[0]
@@ -157,11 +162,11 @@ def fetch_line() -> str:
                     URL.replace("retrieveUserQuotaSummary", endpoint),
                     data=b"{}",
                     headers={
-                        "Authorization": f"Bearer {token}",
                         "Content-Type": "application/json",
                         "User-Agent": "antigravity",
                     },
                 )
+                req.add_unredirected_header("Authorization", f"Bearer {token}")
                 try:
                     with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
                         return json.load(response)

@@ -12,7 +12,12 @@ def main() -> None:
         data = json.load(sys.stdin)
     except ValueError:
         data = {}
-    print(claude_line(data))
+    if not isinstance(data, dict):
+        data = {}
+    try:
+        print(claude_line(data))
+    except Exception as error:  # Malformed Claude input must not suppress other providers.
+        print(fmt_line("Claude", f"n/a ({type(error).__name__})"))
     try:
         print(antigravity_line())
     except Exception as error:  # A provider failure must not suppress the other providers.

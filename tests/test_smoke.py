@@ -30,6 +30,34 @@ def test_main_tolerates_bad_stdin(monkeypatch: pytest.MonkeyPatch, capsys) -> No
     assert capsys.readouterr().out.startswith("Claude")
 
 
+@pytest.mark.parametrize("stdin", ["null", "[]", "1"])
+def test_main_tolerates_non_object_stdin(monkeypatch: pytest.MonkeyPatch, capsys, stdin) -> None:
+    monkeypatch.setattr(m, "antigravity_line", lambda: "Antigravity  x")
+    monkeypatch.setattr(m, "codex_line", lambda: "Codex  y")
+    monkeypatch.setattr("sys.stdin", io.StringIO(stdin))
+    m.main()
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("Claude")
+    assert lines[1:] == ["Antigravity  x", "Codex  y"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"rate_limits": 1},
+        {"rate_limits": {"five_hour": {"used_percentage": 10, "resets_at": "x"}}},
+    ],
+)
+def test_malformed_claude_input_is_na_and_keeps_other_lines(monkeypatch, capsys, payload):
+    monkeypatch.setattr(m, "antigravity_line", lambda: "Antigravity  x")
+    monkeypatch.setattr(m, "codex_line", lambda: "Codex  y")
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
+    m.main()
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("Claude") and "n/a" in lines[0]
+    assert lines[1:] == ["Antigravity  x", "Codex  y"]
+
+
 def test_provider_failure_does_not_hide_codex(monkeypatch, capsys):
     def broken():
         raise OSError("cache unavailable")

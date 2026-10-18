@@ -6,8 +6,8 @@
 `fetchAvailableModels` on the same host. Model data uses a generic quota label, since it
 provides no weekly window. HTTP 401 permits one bounded, non-interactive `agy models` attempt;
 `agy` retains OAuth/keyring ownership. Cache writes are atomic and optional; successful rows
-survive failures with observation timestamps and stale markers. `main.py` isolates Antigravity
-exceptions so Codex still renders. Installer, hook, skills and module entry points are unchanged.
+survive failures with observation timestamps and stale markers. `main.py` isolates Claude and
+Antigravity exceptions so the other providers still render, and treats non-object stdin as `{}`. Installer, hook, skills and module entry points are unchanged.
 The original API reference and historical verification notes below describe 0.2.0 unless noted.
 
 ## Overview
@@ -68,10 +68,10 @@ flowchart LR
 ## Modules
 | Module | Responsibility | Status |
 |---|---|---|
-| `src/usage_statusline/main.py` | Reads stdin and prints the Claude line, the Antigravity lines, then the Codex line if any | built (3 tests in `test_smoke.py`) |
+| `src/usage_statusline/main.py` | Reads stdin and prints the Claude line, the Antigravity lines, then the Codex line if any | built |
 | `src/usage_statusline/codex.py` | Finds the newest Codex `token_count` rate limits and formats one line, with rollover and plan-dependent window labels | built (9 tests), verified on real free-plan and Go-plan transcripts on 2026-09-28 |
 | `src/usage_statusline/claude.py` | Formats the Claude 5-hour and 7-day windows, and owns the aligned layout shared by all lines | built (4 tests) |
-| `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses quota groups, and caches the lines | built (10 tests), verified live on 2026-09-27 |
+| `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses quota groups, and caches the lines | built; summary and model fallback, bounded credential recovery, atomic stale cache, verified live on 2026-10-17 |
 | `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (12 tests), verified on the real keyring on 2026-09-27 |
 | `src/usage_statusline/settings_entry.py` | Adds or removes the `statusLine` key in `settings.json`, run by `install.sh` | built (2 tests) |
 | `install.sh` | Installs or uninstalls the settings entry through `settings_entry`, then runs `agy_setup`. With `--dest`, runs from a copy | built (6 tests) |
@@ -87,8 +87,8 @@ flowchart LR
 - `codex.codex_line(sessions: Path = SESSIONS, now: float | None = None) -> str | None`: `None` when `sessions` isn't a directory, `Codex          no usage yet` when no event is found, otherwise one aligned line. Never raises; errors print `n/a (<ExceptionName>)`. `SESSIONS` is `$CODEX_HOME/sessions`, default `~/.codex/sessions`.
 - `antigravity.parse_summary(resp: dict) -> list[tuple[str, Window | None, Window | None]]`: one `(label, 5h, weekly)` per group in API order, where `Window = (used_pct, reset datetime)`. A missing `remainingFraction` counts as 100% used. Buckets without `resetTime` are skipped. Labels come from `GROUP_LABELS` by `bucketId` prefix, else `displayName`.
 - `antigravity.format_lines(groups) -> str`: one line per group joined by `\n`, or `Antigravity    no quota data`.
-- `antigravity.fetch_line() -> str`: makes a network call and never raises. Errors become a single `Antigravity    n/a (...)` line.
-- `antigravity.antigravity_line(cache: Path = CACHE, now: float | None = None) -> str`: returns the possibly multi-line text, fetches at most once per `CACHE_TTL` (60 s), and caches errors too.
+- `antigravity.fetch_line() -> str`: fetches summary and optional Gemini model quotas; endpoint failures become labeled error rows while successful rows remain available. One HTTP 401 permits bounded agy-owned credential recovery. Authorization headers are not forwarded on redirects.
+- `antigravity.antigravity_line(cache: Path = CACHE, now: float | None = None) -> str`: returns multi-line text, throttles attempts for 60 seconds when writable, retains timestamped successful rows as stale on errors, and replaces cache files atomically.
 - `antigravity.extract_token(raw: str) -> str`: accepts a plain token, oauth2 JSON (`access_token`), agy's wrapper (`{"token": {oauth2}}`), or `go-keyring-base64:`. Raises `ValueError` on bad JSON or base64.
 - `agy_setup.main(argv, run=sh, which=shutil.which) -> int`: returns 0 when it saves the config, 1 otherwise. `run` takes an argv list and returns stdout, which tests replace with a fake keyring.
 - `settings_entry.update(settings, cmd, mode) -> str | None`: changes the dict in place; `mode` is `install` or `--uninstall`; returns `None` when uninstall finds another command. CLI: `python3 -m usage_statusline.settings_entry PATH CMD MODE`.
@@ -120,8 +120,11 @@ flowchart LR
 - 2026-09-27: Errors are cached for the full TTL, so an expired token never makes the status line call the API on every update.
 
 ## How data flows
+
+The current function-by-function path and trust boundaries are documented in
+[data_flow.md](data_flow.md). The steps below summarize it.
 1. Claude Code runs `PYTHONPATH=<repo>/usage-statusline/src python3 -m usage_statusline` with JSON on stdin.
-2. `main` parses stdin and treats invalid JSON as `{}`.
+2. `main` parses stdin and treats invalid JSON or a non-object value as `{}`. Claude and Antigravity failures print `n/a (<ExceptionName>)` without hiding the other lines.
 3. `claude_line` formats `rate_limits.five_hour` and `rate_limits.seven_day`, skipping any window that is absent.
-4. `antigravity_line` returns the cached line if it is less than 60 seconds old. Otherwise, it runs the token command, POSTs `{}` to `retrieveUserQuotaSummary`, formats one line per quota group, and writes the cache.
+4. `antigravity_line` returns the cached line if it is less than 60 seconds old. Otherwise, it runs the token command, POSTs `{}` to `retrieveUserQuotaSummary`, and adds Gemini `quota` rows from `fetchAvailableModels` when the summary lacks Gemini or fails. One HTTP 401 per fetch runs a bounded `agy models` refresh, rereads the token, and retries once. On errors it keeps previous successful rows marked `stale (updated …)`, then writes the cache atomically.
 5. `codex_line` tails the newest Codex transcripts, if `~/.codex/sessions` exists, and formats the last `rate_limits` it finds. It keeps no cache.

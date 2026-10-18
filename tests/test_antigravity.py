@@ -43,6 +43,11 @@ RESP = {
 }
 
 
+def sent_headers(req) -> dict:
+    """Headers as sent, whether set normally or as unredirected."""
+    return {**req.headers, **req.unredirected_hdrs}
+
+
 def test_parse_summary_one_entry_per_group() -> None:
     groups = ag.parse_summary(RESP)
     assert [g[0] for g in groups] == ["AG Gemini", "AG Claude/GPT", "Future Group"]
@@ -51,6 +56,34 @@ def test_parse_summary_one_entry_per_group() -> None:
     assert claude[1][0] == pytest.approx(25)
     assert claude[2][0] == pytest.approx(100)  # missing remainingFraction means exhausted
     assert future[1] is None and future[2] is None  # bucket without resetTime is skipped
+
+
+@pytest.mark.parametrize(
+    "bad", [-0.1, 1.5, True, False, "0.5", None, float("nan"), float("inf"), float("-inf")]
+)
+def test_parse_summary_skips_invalid_remaining_fraction(bad) -> None:
+    resp = {
+        "groups": [
+            {
+                "displayName": "Gemini Models",
+                "buckets": [
+                    {
+                        "window": "5h",
+                        "resetTime": "2026-09-27T19:00:27Z",
+                        "remainingFraction": bad,
+                    },
+                    {
+                        "window": "weekly",
+                        "resetTime": "2026-09-29T02:28:05Z",
+                        "remainingFraction": 0.5,
+                    },
+                ],
+            }
+        ]
+    }
+    (_, session, weekly) = ag.parse_summary(resp)[0]
+    assert session is None
+    assert weekly is not None and weekly[0] == pytest.approx(50)
 
 
 def test_format_lines_one_line_per_group() -> None:
@@ -86,7 +119,7 @@ def test_token_command_runs_without_a_shell(monkeypatch: pytest.MonkeyPatch) -> 
     sent = {}
 
     def fake_urlopen(req, timeout):
-        sent.update(req.headers)
+        sent.update(sent_headers(req))
         return io.BytesIO(json.dumps(RESP).encode())
 
     monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo 'ya29.abc' | cat")
@@ -101,7 +134,7 @@ def test_fetch_sends_token_and_user_agent(monkeypatch: pytest.MonkeyPatch) -> No
     sent = {}
 
     def fake_urlopen(req, timeout):
-        sent.update(req.headers)
+        sent.update(sent_headers(req))
         return io.BytesIO(json.dumps(RESP).encode())
 
     monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo ya29.abc")
@@ -109,6 +142,22 @@ def test_fetch_sends_token_and_user_agent(monkeypatch: pytest.MonkeyPatch) -> No
     assert "AG Claude/GPT  session  25%" in ag.fetch_line()
     assert sent["Authorization"] == "Bearer ya29.abc"
     assert sent["User-agent"] == "antigravity"  # default Python-urllib gets HTTP 403
+
+
+def test_authorization_is_unredirected(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests = []
+
+    def fake_urlopen(req, timeout):
+        requests.append(req)
+        return io.BytesIO(json.dumps(RESP).encode())
+
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo ya29.abc")
+    monkeypatch.setattr(ag.urllib.request, "urlopen", fake_urlopen)
+    ag.fetch_line()
+    assert requests
+    for req in requests:
+        assert "Authorization" not in req.headers  # redirects copy req.headers
+        assert req.unredirected_hdrs["Authorization"] == "Bearer ya29.abc"
 
 
 def test_cache_is_reused_within_ttl(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -293,9 +342,9 @@ def test_401_rereads_refreshed_token(monkeypatch):
     )
 
     def respond(req, timeout):
-        if req.headers["Authorization"] == "Bearer old-token":
+        if sent_headers(req)["Authorization"] == "Bearer old-token":
             raise urllib.error.HTTPError(req.full_url, 401, "expired", {}, None)
-        assert req.headers["Authorization"] == "Bearer new-token"
+        assert sent_headers(req)["Authorization"] == "Bearer new-token"
         return io.BytesIO(json.dumps(RESP).encode())
 
     monkeypatch.setattr(ag, "refresh_login", lambda: True)

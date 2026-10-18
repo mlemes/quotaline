@@ -9,7 +9,7 @@ Constraints: standard library only; no stored tokens, new OAuth client, keyring 
 1. Add regression tests and observe failures: summary without Gemini, model quota fallback and missing values, partial endpoint failure, expired credentials and 401 retry, cache failure recovery and read-only storage, malformed data, provider isolation.
 2. Implement quota retrieval and bounded refresh in src/usage_statusline/antigravity.py. Reuse existing layout, with a `quota` label for model-level data. Keep last successful endpoint data when only one endpoint fails.
 3. Make cache writes atomic and optional. Retain successful output on errors, mark every stale line with observation time, and throttle failed retries for 60 seconds. Isolate exceptions in main.py so one provider never suppresses another.
-4. Update README.md, PRIVACY.md, docs/DATA.md and docs/ARCHITECTURE.md for endpoints, refresh subprocess, cache semantics and limits. Update version metadata.
+4. Update README.md, PRIVACY.md, docs/DATA.md and docs/architecture.md for endpoints, refresh subprocess, cache semantics and limits. Update version metadata.
 5. Run complete pytest suite, Ruff, installer/plugin checks and a live fetch without printing secrets. Review final diff. Commit and push main; verify remote commit.
 6. Open the supplied Anthropic submission page in a browser, read status if authenticated, and report any authentication/access blocker without changing the submission.
 
@@ -26,3 +26,33 @@ Acceptance: Gemini displays real API usage with no fabricated weekly number; Cla
   submission data was visible and no submission fields were changed.
 - Live model endpoint confirmed Gemini quota with the existing credentials; transient request
   failures remain possible and are represented explicitly rather than replacing successful data.
+
+## Final review and cost
+
+- The assigned Antigravity review timed out without findings or a usable result. The Claude
+  architect performed a security review and wrote the required data-flow documentation.
+- Accepted review findings: prevent credential forwarding on redirects; tolerate non-object
+  stdin; update outdated architecture references. Sonnet wrote the two regression tests;
+  four parametrized cases failed before implementation. The pre-existing type-check error in
+  Claude formatting was corrected by passing the two known windows explicitly.
+- Deliberate limits: stale historical rows have no expiry and remain explicitly timestamped;
+  read-only cache storage disables persistent throttling. No second cache location, daemon,
+  new OAuth implementation, or automatic sign-in was added. Normal agy startup can initialize
+  its configured plugins; refresh has a 10-second process-group bound.
+- Cost: a complete quota result previously used one HTTP request but omitted Gemini. It now
+  uses two requests when Gemini is absent from the summary, one otherwise, with one possible
+  authentication retry per cycle. No model inference prompt is submitted by quotaline;
+  prompt size and model-token consumption for quota retrieval remain zero.
+
+- Final fallback review: Haiku confirmed redirect safety and formatting compatibility, and
+  identified malformed nested Claude data and invalid summary quota fractions. Sonnet wrote
+  11 parametrized regression cases; all failed before the minimal fixes. Claude exceptions
+  are now isolated, and invalid summary fractions are skipped without discarding valid windows.
+
+## Final gate (2026-10-18)
+
+- Architect line-by-line check: the bearer token is sent with `add_unredirected_header` on every
+  attempt, including the 401 retry, so urllib redirects do not copy it; error rows show only the
+  HTTP code. Both accepted findings are fixed and covered by tests.
+- pytest: 88 passed. ty check src, Ruff lint and format check, `bash -n install.sh`,
+  `claude plugin validate .` and `git diff --check` passed.

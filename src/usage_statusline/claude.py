@@ -49,4 +49,4 @@ def claude_line(data: dict) -> str:
             windows.append(None)
     if windows == [None, None]:
         return fmt_line("Claude", "usage appears after the first reply")
-    return fmt_line("Claude", fmt_windows(*windows))
+    return fmt_line("Claude", fmt_windows(windows[0], windows[1]))
