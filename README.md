@@ -2,7 +2,8 @@
 
 This project adds quota lines to the Claude Code status line for your Claude Pro plan,
 Antigravity (`agy`), and Codex CLI on your ChatGPT plan. It shows session and weekly windows
-when provided, with model quota fallback for Gemini.
+when provided, with model quota fallback for Gemini. An optional [local OmniRoute source](#use-a-local-omniroute-source-optional)
+reads explicitly selected accounts instead of the native readers.
 
 ```
 Claude         session  24% · resets Sun 20:00 | week  41% · resets Thu 21:13
@@ -86,6 +87,58 @@ To remove the status line, run `./install.sh --uninstall`. To skip the Antigravi
 `./install.sh --no-agy`.
 The status line runs the code from your clone, so keep the clone in place.
 
+## Use a local OmniRoute source (optional)
+
+Native mode remains the default. To read Claude, Antigravity and Codex subscription quotas
+from an existing OmniRoute on `127.0.0.1:20128`, install with `--no-agy` if you do not need
+native Antigravity setup, then:
+
+1. In OmniRoute, supply a dedicated key with usage-command permission and an explicit
+   allow-list of the connections you intend to display. An inference-capable key can still
+   receive HTTP 403 for usage. quotaline does not create keys or change permissions.
+2. Save that key in a private file, for example
+   `~/.config/usage-statusline/omniroute-usage-key`. Use `chmod 600` on it.
+3. Create `~/.config/usage-statusline/omniroute.json` using your exact connection IDs:
+
+   ```json
+   {
+     "key_file": "/home/you/.config/usage-statusline/omniroute-usage-key",
+     "connections": [
+       {"provider": "claude", "connection_id": "your-claude-connection"},
+       {"provider": "agy", "connection_id": "your-agy-connection", "alias": "work"},
+       {"provider": "codex", "connection_id": "your-codex-connection"}
+     ]
+   }
+   ```
+
+   Keep only the connections you want, and protect this file with `chmod 600` too. Supported
+   provider names are exactly `claude`, `agy`, and `codex`. An optional short printable
+   `alias` appears after each label. Connection IDs select accounts; response order and the
+   router's preferred account do not. No provider credentials are copied.
+
+When this file exists, the status line uses only OmniRoute, including on errors. It does not
+read Claude stdin usage, Codex transcripts or the Antigravity keyring, and does not run native
+quota requests or credential recovery. Invalid config produces a visible configuration error.
+Remove or rename the file to restore native mode; native configuration and caches are kept.
+
+quotaline makes one authenticated GET to
+`http://127.0.0.1:20128/api/usage/om-usage?format=json`, with a two-second timeout, no proxy
+and no redirects. HTTP 401 means check the usage key; HTTP 403 means enable usage permission.
+Successful and failed attempts are throttled for 60 seconds when its separate cache is writable.
+This reads OmniRoute's cached subscription quotas, never its personal key budget, and makes
+no inference call or provider refresh.
+
+The header says `OmniRoute … upstream age unknown`: receipt time does not establish provider
+freshness. Failed connections can retain their last complete rows with
+`stale (received YYYY-MM-DD HH:MM)` alongside the error, while healthy connections update.
+Past reset times do not turn historical percentages into zero. Missing or disagreeing
+Antigravity family quotas produce an error; Argon uses only its explicit weekly meter and
+has no session. Codex labels longer windows by duration, such as `30d`.
+
+The private cache is `~/.cache/usage-statusline/omniroute.json`; it stores only selected
+formatted rows, opaque connection IDs, a configuration fingerprint and local timestamps.
+Neither the key nor raw responses are cached. See [PRIVACY.md](PRIVACY.md) for deletion.
+
 ## Set up the Antigravity line
 
 `agy` keeps its OAuth access token in the system keyring. The installer runs
@@ -120,6 +173,10 @@ error. Stale values are historical, even after their reset times pass. Retries a
 once per 60 seconds when the cache is writable. A cache write failure does not hide fresh usage.
 
 ## What this plugin runs, reads, writes, and sends
+
+The native paths below apply when `omniroute.json` is absent. Configured OmniRoute mode
+uses the separate local read, key file and cache described above; installers still perform
+Antigravity setup unless you pass `--no-agy`.
 
 - **Runs:** `install.sh`, only when you run `/quotaline:install` or `/quotaline:uninstall`.
   `install.sh` runs two bundled Python modules, `usage_statusline.settings_entry` (edits
@@ -208,6 +265,8 @@ changes on every plugin update. The hook copies the plugin's own `src/usage_stat
 and makes no network requests.
 
 ## How it works
+
+These are the default native readers; optional OmniRoute mode replaces this runtime path.
 
 - The Claude line reads `rate_limits.five_hour` and `rate_limits.seven_day` from the JSON that
   Claude Code sends to the status line. Claude Code provides these fields only for Pro and Max

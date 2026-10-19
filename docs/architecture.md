@@ -1,5 +1,45 @@
 # Architecture
 
+## Optional OmniRoute source (0.3.0)
+
+`main.py` calls `omniroute.omniroute_lines()` before reading stdin. Absence of
+`~/.config/usage-statusline/omniroute.json` returns `None` and preserves the native path
+described below. An existing config selects only its mapped OmniRoute connections; output
+or failure returns immediately without native readers. This avoids assuming that a router
+account matches a native account. A malformed config is an error, not fallback.
+
+`omniroute.py` owns config/key validation, a fixed authenticated loopback GET, exact
+connection/provider matching, quota conversion and its separate private cache. It uses only
+the standard library and the existing shared formatters in `claude.py`. `parse_connection`
+returns one selected connection's complete formatted rows; `fetch_snapshot` reads the local
+usage JSON; `omniroute_lines` combines selected rows, stale history and errors. No installer,
+hook, native provider API or credential-refresh changes are needed.
+
+Transport is pinned to `127.0.0.1:20128/api/usage/om-usage?format=json`, with a two-second
+timeout, disabled environment proxies and rejected redirects. The referenced usage key is
+kept in memory only and sent in an unredirected Bearer header. A scoped usage-capable key
+is required; quotaline never imports router/provider credentials or changes permissions.
+Static errors cannot expose response bodies, key material or connection identities.
+
+Claude and Codex quota aggregates use percent units. Codex `windowSeconds` controls column
+placement and duration labels. AG uses precise `remainingPercentage`, requires agreement
+across each session family and uses the explicit three weekly keys. Argon remains weekly
+only. Invalid/missing required AG values fail that complete connection rather than mix
+windows or choose an arbitrary model. Live quota coverage was verified October 18–19, 2026;
+it supersedes the initial source-level concern about missing AG weekly aggregates.
+
+`~/.cache/usage-statusline/omniroute.json` stores only selected formatted rows, opaque IDs,
+local receipt/attempt times and a configuration fingerprint. Successful and failed attempts
+are throttled 60 s; config changes invalidate scope. Atomic 0600 replacement and optional writes
+preserve output when storage fails. Partial failures retain only that connection's previous
+complete rows with `stale (received …)` and current error; successful connections update.
+The header always says `upstream age unknown`. A cached GET supplies no upstream observation
+time, so receipt/reset time never proves freshness and past resets never fabricate 0% usage.
+
+Deployment is unchanged: clone installs execute their source, plugin sync copies the whole
+package including this module. Operators opt in by creating the config/key files and can
+restore native mode by removing the config. No automatic local activation or service startup.
+
 ## Complete Antigravity groups (0.2.2)
 
 Quota requests use the verified `antigravity/cli/1.4.2` User-Agent. Live checks on
@@ -22,6 +62,7 @@ Antigravity exceptions so the other providers still render, and treats non-objec
 The original API reference and historical verification notes below describe 0.2.0 unless noted.
 
 ## Overview
+The following overview describes native mode when OmniRoute is unconfigured.
 Claude Code runs a status line command after each update and every 60 seconds. It sends session
 JSON to the command on stdin. `usage_statusline` prints provider quota lines. The first shows
 Claude Pro 5-hour and 7-day usage from that JSON. The others show one Antigravity (`agy`) quota
@@ -39,15 +80,19 @@ hand work off from Claude Code to `agy` and Codex, so you can watch and balance 
 ```mermaid
 flowchart TB
     cc([Claude Code status line JSON on stdin]) --> main["1. Entry point<br/><code>src/usage_statusline/main.py</code>"]
-    main --> claude["2. Claude line<br/><code>src/usage_statusline/claude.py</code>"]
-    main --> ag["3. Antigravity lines<br/><code>src/usage_statusline/antigravity.py</code>"]
+    main --> omni["Optional configured source<br/><code>omniroute.py</code>"]
+    local([OmniRoute loopback usage JSON + selected key file]) --> omni
+    omni <--> ocache([separate omniroute.json cache])
+    omni --> out
+    main -->|config absent| claude["2. Claude line<br/><code>src/usage_statusline/claude.py</code>"]
+    main -->|config absent| ag["3. Antigravity lines<br/><code>src/usage_statusline/antigravity.py</code>"]
     tok([token command in agy_token_cmd]) --> ag
     api([retrieveUserQuotaSummary + fetchAvailableModels]) --> ag
     ag --> refresh["agy models on HTTP 401: bounded credential refresh"]
     ag <--> cache([~/.cache/usage-statusline/antigravity.json])
     claude --> out([provider quota lines])
     ag --> out
-    main --> codex["4. Codex line<br/><code>src/usage_statusline/codex.py</code>"]
+    main -->|config absent| codex["4. Codex line<br/><code>src/usage_statusline/codex.py</code>"]
     rollout([~/.codex/sessions rollout-*.jsonl tail]) --> codex
     codex --> out
     inst["0a. Installer<br/><code>install.sh</code>"] --> settings([~/.claude/settings.json])
@@ -63,7 +108,8 @@ flowchart TB
 | 0a. Installer | `install.sh` | `~/.claude/settings.json` | `statusLine` key, one-time `.bak-usage-statusline` backup, `DIR/src` with `--dest` |
 | 0c. Plugin | `skills/install`, `skills/uninstall`, `hooks/hooks.json` | `${CLAUDE_PLUGIN_ROOT}` | runs `install.sh --dest ${CLAUDE_PLUGIN_DATA}` (`--sync` at session start) |
 | 0b. Keyring setup | `src/usage_statusline/agy_setup.py` | keyring labels and attributes, one secret lookup | `~/.config/usage-statusline/agy_token_cmd` |
-| 1. Entry point | `src/usage_statusline/main.py` | stdin JSON | stdout |
+| 1. Entry point | `src/usage_statusline/main.py` | source selection, native stdin JSON | stdout |
+| Optional router source | `src/usage_statusline/omniroute.py` | explicit config, selected key file, loopback usage JSON, own cache | selected rows and own cache |
 | 2. Claude line | `src/usage_statusline/claude.py` | `rate_limits` in the JSON | one line, plus the shared column layout |
 | 3. Antigravity lines | `src/usage_statusline/antigravity.py` | token command, API, cache | cache file, one line per quota group |
 | 4. Codex line | `src/usage_statusline/codex.py` | last 256 KiB of up to 3 newest `rollout-*.jsonl` | one line, or nothing without `~/.codex/sessions` |
@@ -80,7 +126,8 @@ flowchart LR
 ## Modules
 | Module | Responsibility | Status |
 |---|---|---|
-| `src/usage_statusline/main.py` | Reads stdin and prints the Claude line, the Antigravity lines, then the Codex line if any | built |
+| `src/usage_statusline/main.py` | Selects configured OmniRoute mode or the existing native stdin/provider path | built |
+| `src/usage_statusline/omniroute.py` | Validates explicit mapping, reads local usage JSON, preserves quota semantics and mapping-bound stale rows | optional in 0.3.0 |
 | `src/usage_statusline/codex.py` | Finds the newest Codex `token_count` rate limits and formats one line, with rollover and plan-dependent window labels | built (9 tests), verified on real free-plan and Go-plan transcripts on 2026-09-28 |
 | `src/usage_statusline/claude.py` | Formats the Claude 5-hour and 7-day windows, and owns the aligned layout shared by all lines | built (4 tests) |
 | `src/usage_statusline/antigravity.py` | Gets and decodes the token, calls the API, parses quota groups, and caches the lines | built; summary and model fallback, bounded credential recovery, atomic stale cache, verified live on 2026-10-17 |
@@ -90,6 +137,9 @@ flowchart LR
 | `.claude-plugin/`, `skills/`, `hooks/` | Plugin manifest, `mlemes` marketplace, install and uninstall skills, and the sync hook | built (2 tests in `test_plugin.py`), `claude plugin validate .` passes |
 
 ### Public API of what is built
+- `omniroute.omniroute_lines(config: Path = CONFIG, cache: Path = CACHE, now: float | None = None) -> str | None`: `None` only for absent config; otherwise one source header, selected rows and sanitized errors, with 60 s attempt throttle and per-connection stale retention.
+- `omniroute.fetch_snapshot(key: str) -> dict`: fixed loopback authenticated GET, validates allowed/object/providers shape, no proxy or redirect.
+- `omniroute.parse_connection(snapshot: dict, selection: dict) -> list[str]`: exact identity/provider and quota validation, shared formatting, or `ValueError` for unavailable/inconsistent data.
 - `claude.claude_line(data: dict) -> str`: never raises on missing fields.
 - `claude.LABEL_WIDTH = 15`: every line pads its label to this width.
 - `claude.fmt_window(label: str, used_pct: float, resets_at: datetime) -> str`: `"week  41% · resets Thu 09:00"` in local time, percent right-aligned to 3 digits.
@@ -136,7 +186,7 @@ flowchart LR
 The current function-by-function path and trust boundaries are documented in
 [data_flow.md](data_flow.md). The steps below summarize it.
 1. Claude Code runs `PYTHONPATH=<repo>/usage-statusline/src python3 -m usage_statusline` with JSON on stdin.
-2. `main` parses stdin and treats invalid JSON or a non-object value as `{}`. Claude and Antigravity failures print `n/a (<ExceptionName>)` without hiding the other lines.
+2. `main` checks optional OmniRoute configuration first and prints router rows/errors with no native calls when configured. Otherwise it parses stdin and treats invalid JSON or a non-object value as `{}`. Claude and Antigravity failures print `n/a (<ExceptionName>)` without hiding the other lines.
 3. `claude_line` formats `rate_limits.five_hour` and `rate_limits.seven_day`, skipping any window that is absent.
 4. `antigravity_line` returns the cached line if it is less than 60 seconds old. Otherwise, it runs the token command, POSTs `{}` to `retrieveUserQuotaSummary`, and adds Gemini `quota` rows from `fetchAvailableModels` when the summary lacks Gemini or fails. One HTTP 401 per fetch runs a bounded `agy models` refresh, rereads the token, and retries once. On errors it keeps previous successful rows marked `stale (updated …)`, then writes the cache atomically.
 5. `codex_line` tails the newest Codex transcripts, if `~/.codex/sessions` exists, and formats the last `rate_limits` it finds. It keeps no cache.

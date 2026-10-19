@@ -4,10 +4,19 @@ import sys
 from usage_statusline.antigravity import antigravity_line
 from usage_statusline.claude import claude_line, fmt_line
 from usage_statusline.codex import codex_line
+from usage_statusline.omniroute import omniroute_lines
 
 
 def main() -> None:
     """Read the status line JSON on stdin and print one line per provider."""
+    try:
+        routed = omniroute_lines()
+    except Exception:  # Router mode never falls back to native sources.
+        print(fmt_line("OmniRoute", "n/a (fetch failed)"))
+        return
+    if routed is not None:
+        print(routed)
+        return
     try:
         data = json.load(sys.stdin)
     except ValueError:

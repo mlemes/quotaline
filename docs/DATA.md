@@ -1,6 +1,7 @@
 # Data dictionary
 
-This project stores no datasets. It reads Claude/Codex JSON and two Google quota endpoints.
+This project stores no datasets. Native mode reads Claude/Codex JSON and Google quota endpoints.
+Optional OmniRoute mode reads only the selected local quota snapshots described below.
 
 ## Claude Code status line input (stdin)
 - Source: Claude Code sends this JSON on each status line run. See https://code.claude.com/docs/en/statusline.
@@ -124,3 +125,48 @@ historical rows display their observation timestamp and a stale marker. Writes r
 file atomically. Storage failures do not prevent rendering, but disable the persistent throttle.
 On HTTP 401, one bounded `agy models` invocation owns credential refresh before the plugin
 rereads the token. No token, account identifier or raw model response is cached.
+
+## Optional OmniRoute config and usage response (0.3.0)
+
+Source: authenticated GET
+`http://127.0.0.1:20128/api/usage/om-usage?format=json`, verified live October 18–19, 2026.
+Two-second timeout; no environment proxy or redirect. No upstream observation timestamp is
+provided. This endpoint reads OmniRoute's cache without triggering provider refresh.
+
+Config `~/.config/usage-statusline/omniroute.json` contains `key_file` (absolute or leading-`~`
+path) and nonempty `connections` with exact `provider`, `connection_id`, optional printable
+`alias`. Providers are `claude`, `agy`, `codex`; duplicate selected IDs and unknown fields
+are invalid. The key is read separately, never copied into the cache.
+
+| Response field | Meaning |
+|---|---|
+| `allowed` | Must be exactly boolean true |
+| `providers[]` | Connection snapshots; exact `connectionId` and `provider` must match config |
+| `providers[].quotas` | Subscription windows/models for that connection |
+| `provider` | Router preference; ignored |
+| `personal` | Router key budget; ignored |
+| Claude `session (5h)`, `weekly (7d)` | `used` percent, `total=100`; both required |
+| Codex `session`, `weekly` | `used` percent, `total=100`; at least one required |
+| Codex `windowSeconds` | Positive integer; <=86400 goes to session, longer to second column; `week` for 604800, otherwise whole-day label such as 30d |
+| AG model `remainingPercentage` | Authoritative percentage remaining; used=100-remainingPercentage; integer used/total 1000 are rounded |
+| AG `gemini_weekly`, `claude_gpt_weekly`, `gemini_4_argon_weekly` | Explicit distinct weekly aggregates |
+| Quota `resetAt` | ISO8601 datetime with explicit timezone; local display only |
+
+Percentages must be finite numbers in [0, 100], excluding bool. Unlimited, missing or malformed
+required quotas do not imply 0%. Optional Claude/Codex remainingPercentage must agree with
+used within 0.1 point. Past resets retain historical usage; receipt does not prove freshness.
+
+AG Gemini session requires agreeing `gemini-*` model percent/reset pairs excluding
+`gemini-4-argon-*`; Claude/GPT requires agreeing `claude-*`/`gpt-*` pairs. Unknown/internal
+keys are ignored. Missing or inconsistent required family/weekly values fail the complete
+connection. Argon has only its explicit weekly aggregate, never a model-derived session.
+
+## OmniRoute cache
+
+`~/.cache/usage-statusline/omniroute.json` contains version 1, a canonical configuration
+fingerprint, `attempted_at`, rendered `line`, and `connections` selected-connection records with
+`rows` and `received_at`. Selected opaque IDs identify records; no key/path/raw response or
+unselected account is stored. Configuration changes invalidate scope. Failed attempts also
+throttle 60 s. Unreadable/corrupt/future timestamps are misses. Atomic 0600 replacement and
+best-effort writes preserve output if storage fails. Failed connections retain their pristine
+last successful rows marked `stale (received …)` plus error; other connections can update.

@@ -1,0 +1,116 @@
+{
+  "allowed": true,
+  "personal": {
+    "used": 999,
+    "total": 1000
+  },
+  "providers": [
+    {
+      "connectionId": "test-agy-connection",
+      "provider": "agy",
+      "quotas": {
+        "gemini-3.8-flash-low": {
+          "used": 180,
+          "total": 1000,
+          "resetAt": "2026-10-19T05:15:15.000Z",
+          "remainingPercentage": 81.97917,
+          "unlimited": false
+        },
+        "gemini-3.8-flash-high": {
+          "used": 180,
+          "total": 1000,
+          "resetAt": "2026-10-19T05:15:15.000Z",
+          "remainingPercentage": 81.97917,
+          "unlimited": false
+        },
+        "claude-sonnet-5-5-high": {
+          "used": 0,
+          "total": 1000,
+          "resetAt": "2026-10-19T07:26:06.000Z",
+          "remainingPercentage": 99.9988,
+          "unlimited": false
+        },
+        "gpt-oss-120b-medium": {
+          "used": 0,
+          "total": 1000,
+          "resetAt": "2026-10-19T07:26:06.000Z",
+          "remainingPercentage": 99.9988,
+          "unlimited": false
+        },
+        "gemini-4-argon-high": {
+          "used": 1000,
+          "total": 1000,
+          "resetAt": "2026-10-25T00:34:41.000Z",
+          "remainingPercentage": 0,
+          "unlimited": false
+        },
+        "gemini_weekly": {
+          "used": 62,
+          "total": 1000,
+          "resetAt": "2026-10-24T02:56:06.000Z",
+          "remainingPercentage": 93.79738,
+          "unlimited": false
+        },
+        "claude_gpt_weekly": {
+          "used": 3,
+          "total": 1000,
+          "resetAt": "2026-10-21T15:34:26.000Z",
+          "remainingPercentage": 99.66192000000001,
+          "unlimited": false
+        },
+        "gemini_4_argon_weekly": {
+          "used": 1000,
+          "total": 1000,
+          "resetAt": "2026-10-25T00:34:41.000Z",
+          "remainingPercentage": 0,
+          "unlimited": false
+        }
+      }
+    },
+    {
+      "connectionId": "test-claude-connection",
+      "provider": "claude",
+      "quotas": {
+        "session (5h)": {
+          "used": 1,
+          "total": 100,
+          "resetAt": "2026-10-19T06:30:00.155Z",
+          "remainingPercentage": 99,
+          "unlimited": false
+        },
+        "weekly (7d)": {
+          "used": 98,
+          "total": 100,
+          "resetAt": "2026-10-19T14:00:00.156Z",
+          "remainingPercentage": 2,
+          "unlimited": false
+        }
+      }
+    },
+    {
+      "connectionId": "test-codex-connection",
+      "provider": "codex",
+      "quotas": {
+        "session": {
+          "used": 78,
+          "total": 100,
+          "resetAt": "2026-10-19T06:22:53.000Z",
+          "unlimited": false,
+          "windowSeconds": 18000
+        },
+        "weekly": {
+          "used": 16,
+          "total": 100,
+          "resetAt": "2026-10-24T21:13:11.000Z",
+          "unlimited": false,
+          "windowSeconds": 604800
+        }
+      }
+    }
+  ],
+  "provider": {
+    "connectionId": "unselected-router-preference",
+    "provider": "claude",
+    "quotas": {}
+  }
+}

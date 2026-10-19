@@ -1,6 +1,6 @@
 # Privacy policy
 
-Effective date: October 18, 2026
+Effective date: October 19, 2026
 
 This policy covers the quotaline Claude Code plugin and the `usage-statusline` code it runs. The
 author, Marcus Lemes, doesn't operate any server for quotaline and doesn't receive any data from
@@ -9,6 +9,39 @@ it.
 ## What the author collects
 
 Nothing. quotaline has no telemetry, analytics, crash reporting, or update checks of its own.
+
+## Optional local OmniRoute mode
+
+Without `~/.config/usage-statusline/omniroute.json`, the native behavior below applies.
+With that file, runtime uses only the explicitly selected OmniRoute connections; it does
+not read Claude stdin usage, the Antigravity keyring/token command or Codex transcripts,
+and does not run native requests or `agy models`. Installation still performs native
+Antigravity setup unless `--no-agy` is passed.
+
+quotaline reads the config's supported provider names, opaque connection IDs, optional
+aliases and referenced key-file path. It reads that key file into memory only for a fetch,
+and sends its Bearer key exclusively to the fixed loopback URL
+`http://127.0.0.1:20128/api/usage/om-usage?format=json`. Environment proxies are disabled
+and redirects are rejected. It does not read provider credentials or change router keys,
+permissions or settings. The user supplies a usage-permitted key; no inference is submitted.
+OmniRoute retains ownership of its provider polling, credentials, storage and privacy behavior.
+
+The response includes connection quota snapshots and can include unrelated fields; quotaline
+uses only explicitly mapped provider/ID pairs and subscription quota fields. It discards
+unselected connections, raw responses and the router key's personal budget. Display errors
+never include credentials, connection IDs, raw response text or exception messages.
+
+`~/.cache/usage-statusline/omniroute.json` stores selected formatted rows, selected opaque
+connection IDs, a configuration fingerprint and local attempt/receipt timestamps. Temporary
+sibling files allow atomic private `0600` replacement. No key, key-file path, raw response or
+unselected account data is cached. Protect the config and key file with `chmod 600`; aliases
+are displayed, so choose them accordingly. Receipts do not establish upstream freshness.
+Stale rows can persist without a maximum age, clearly labeled with their original receipt.
+
+Removing or renaming the config restores native mode. Deleting the OmniRoute config/cache
+and the referenced key file removes this integration's local data; key files outside the
+quotaline directory need to be deleted separately. Revoke the dedicated key in OmniRoute
+if you no longer use it. quotaline never deletes or revokes router/provider credentials itself.
 
 ## What quotaline reads on your machine
 
@@ -29,7 +62,7 @@ Nothing. quotaline has no telemetry, analytics, crash reporting, or update check
 
 ## What quotaline stores on your machine
 
-quotaline writes only these files, all on your machine:
+quotaline writes the optional cache described above and these native/install files, all on your machine:
 
 - `~/.claude/settings.json`: the `statusLine` entry, plus a one-time backup of the file at
   `~/.claude/settings.json.bak-usage-statusline`.
@@ -77,7 +110,8 @@ network and storage behavior, as described above.
    ```
 
    Check the backup before you delete it, because it's a copy of your settings from before the
-   first install.
+   first install. Delete the referenced OmniRoute key file separately if it lives outside
+   this directory; revoke its key in OmniRoute if no longer needed.
 
 3. Run `claude plugin uninstall quotaline@mlemes`.
 

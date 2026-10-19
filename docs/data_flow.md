@@ -4,6 +4,54 @@ How data enters, changes, is stored, and leaves `usage_statusline` on one status
 Field-level formats are in `docs/DATA.md`; components and decisions are in
 `docs/architecture.md`.
 
+## 0. Source selection and optional OmniRoute path
+
+1. `main.main()` calls `omniroute.omniroute_lines()` before reading stdin. Only an absent
+   `~/.config/usage-statusline/omniroute.json` returns `None` and enters the native path below.
+   Existing invalid/unreadable config prints a static configuration error. Router output and
+   unexpected adapter errors both return without touching native providers or stdin.
+2. **Trust boundary, user config to selection.** `omniroute_lines` validates JSON object fields
+   `key_file` and nonempty `connections[]`: exact supported `provider`, opaque `connection_id`
+   and optional printable `alias`. Duplicate IDs/unknown fields/control characters fail.
+   No account discovery or automatic credential import occurs.
+3. Reads `~/.cache/usage-statusline/omniroute.json`. Only a valid matching config fingerprint
+   and finite nonfuture `attempted_at` within 60 s permits a cached result. Successful records
+   preserve pristine selected rows and `received_at`; malformed cache is ignored. The
+   fingerprint includes selection order, aliases and key-file path, never key content.
+4. **Trust boundary, private key file to process memory.** On a cache miss, the referenced
+   key file is read and validated as one nonempty key line. Key bytes remain in local memory;
+   they never enter cache, argv, URL, error text or logs. No provider credentials are read.
+5. **Trust boundary, process to local router.** `fetch_snapshot(key)` issues one GET to
+   `http://127.0.0.1:20128/api/usage/om-usage?format=json`, timeout 2 s, with an unredirected
+   Bearer header. Its urllib opener disables environment proxies and rejects redirects.
+   It validates an object with `allowed is True` and list `providers`. The response is parsed
+   only as data. No inference/provider refresh/settings write occurs.
+6. **Trust boundary, router snapshot to subscription rows.** `omniroute_lines` matches each
+   selected `connection_id` to exactly one `providers[].connectionId`, then requires exact
+   `provider`; missing/duplicate/mismatch is an error. Singular `provider`, `personal` and
+   unselected accounts are ignored. `parse_connection(snapshot, selection)` validates finite
+   numeric quota fields and timezone-aware ISO resets, then reuses `fmt_line`/`fmt_windows`.
+   Claude uses percent aggregates; Codex placement/labels follow `windowSeconds`; AG derives
+   used percent from `remainingPercentage`, requires agreeing session model pairs and explicit
+   weekly keys. Argon has weekly only. Past resets retain historical usage.
+7. A successful selected connection replaces its cached complete result and local receipt.
+   Missing/invalid connections retain only their own previous complete result with
+   `stale (received YYYY-MM-DD HH:MM)` and current error. Global HTTP/parse failures may retain
+   all matching previous selected results. Failures never advance receipt time or combine
+   different observations into one connection. HTTP 401/403 and other failures become static
+   messages; response bodies, identity fields and exception text are never displayed.
+8. Writes version, scope fingerprint, `attempted_at`, rendered `line`, and successful selected
+   connection `rows`/`received_at` to a sibling private 0600 temporary file, then atomically
+   replaces cache and cleans up temporary files. Storage errors do not hide fresh output;
+   without writable cache later calls may fetch again. No raw snapshot, key/path or unselected
+   account is stored.
+9. Output to stdout: one `OmniRoute … upstream age unknown` header, configured connection
+   order (AG Gemini, Claude/GPT, Argon within AG), optional display aliases, stale markers and
+   errors. Receipt time is not upstream freshness. Removing the config restores native mode.
+
+The remaining sections describe native mode only. Installation can still run native setup
+unless `--no-agy` is passed; runtime source selection does not change installer behavior.
+
 ## 1. Entry: `main.main()` (`src/usage_statusline/main.py`)
 
 - Input: Claude Code runs `python3 -m usage_statusline` after each update and every 60 s, with
