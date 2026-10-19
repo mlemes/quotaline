@@ -21,25 +21,27 @@ This project stores no datasets. It reads Claude/Codex JSON and two Google quota
 
 ## Antigravity `retrieveUserQuotaSummary` response (used)
 - Source: `POST https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`
-  with a Bearer token, `User-Agent: antigravity`, and body `{}`.
-- Verified live on 2026-09-27: HTTP 200 with two groups.
+  with a Bearer token, `User-Agent: antigravity/cli/1.4.2`, and body `{}`.
+- Verified live on 2026-10-18: HTTP 200 with Gemini, Claude/GPT and separate Argon groups.
 
 | Field | Type | Notes |
 |---|---|---|
 | `groups[].displayName` | string | `Gemini Models`, `Claude and GPT models` |
 | `groups[].description` | string | For example `Models within this group: Gemini Flash, Gemini Pro` |
-| `groups[].buckets[].bucketId` | string | `gemini-5h`, `gemini-weekly`, `3p-5h`, `3p-weekly` |
+| `groups[].buckets[].bucketId` | string | `gemini-5h`, `gemini-weekly`, `3p-5h`, `3p-weekly`, `gemini-argon-wtu-weekly` |
 | `groups[].buckets[].window` | string | `5h` or `weekly` |
 | `groups[].buckets[].resetTime` | string | RFC 3339 UTC |
 | `groups[].buckets[].remainingFraction` | number | 0 to 1. Treated as exhausted when missing |
 | `description` | string | Top-level: "Within each group, models share a weekly limit and a 5-hour limit..." |
 
 **Quirks:**
-- Gemini Flash and Pro shared one summary group in September. On October 17, 2026, this
-  account returned only the Claude/GPT summary group; missing Gemini triggers model fallback.
+- Gemini Flash and Pro shared one summary group in September. The bare `antigravity`
+  User-Agent returned only Claude/GPT on October 17; the CLI header restored Gemini and
+  exposed a separate Argon weekly group on October 18. Missing Gemini still triggers model fallback.
 - Adding a `metadata` field to the request body returns HTTP 400. Send `{}`.
-- The status line labels groups by the `bucketId` prefix (`gemini`, `3p`) and falls back to
-  `displayName` for unknown groups.
+- The status line labels groups by the `bucketId` prefix (`gemini-argon-` before `gemini`,
+  then `3p`) and falls back to `displayName` for unknown groups. Argon has its own `AG Argon`
+  row; its weekly-only bucket leaves the session window absent.
 - An unused 5-hour window shows `remainingFraction: 1`, and its `resetTime` rolls to about
   5 hours after the request until first use. Measured on 2026-09-27: Gemini weekly 14% used,
   Claude/GPT weekly 19% used.
@@ -93,7 +95,8 @@ This project stores no datasets. It reads Claude/Codex JSON and two Google quota
 
 **Quirks:**
 - The request needs a non-default `User-Agent`. With the default `Python-urllib/3.x`, Google
-  returns HTTP 403 even with a valid token. `User-Agent: antigravity` works.
+  returns HTTP 403 even with a valid token. Requests use `User-Agent: antigravity/cli/1.4.2`
+  for consistency with the complete summary response.
 - An unused model shows `remainingFraction: 1` and a `resetTime` about 5 hours after the
   request, so the window rolls forward until first use. The endpoint shows no weekly window,
   so the fallback displays `quota` and a reset time without claiming a weekly window.

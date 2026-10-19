@@ -1,5 +1,16 @@
 # Architecture
 
+## Complete Antigravity groups (0.2.2)
+
+Quota requests use the verified `antigravity/cli/1.4.2` User-Agent. Live checks on
+2026-10-18 showed that the bare `antigravity` header omitted Gemini and Argon summary groups.
+`parse_summary` recognizes `gemini-argon-` before the generic `gemini` prefix, so Argon keeps
+its own `AG Argon` row and successful-cache key. Its weekly bucket does not imply a session
+window. Existing Gemini/Claude labels, unknown-group fallback and missing-Gemini model
+fallback remain unchanged. This header is fixed; no CLI-version subprocess is needed.
+The complete summary normally needs one quota request instead of the old header's summary
+plus model fallback (two requests); neither path makes inference calls.
+
 ## Antigravity reliability update (0.2.1)
 
 `antigravity.py` retains the summary endpoint and supplements absent Gemini groups with
@@ -14,8 +25,9 @@ The original API reference and historical verification notes below describe 0.2.
 Claude Code runs a status line command after each update and every 60 seconds. It sends session
 JSON to the command on stdin. `usage_statusline` prints provider quota lines. The first shows
 Claude Pro 5-hour and 7-day usage from that JSON. The others show one Antigravity (`agy`) quota
-group each (Gemini, and Claude/GPT) with its 5-hour and weekly usage, fetched from Google's Code
-Assist API and cached; Gemini model fallback can add separate quota rows. The last shows Codex CLI usage, read from the tail of Codex's own session
+group each (Gemini, Claude/GPT, and Argon) with its available 5-hour and weekly usage, fetched
+from Google's Code Assist API and cached; Gemini model fallback can add separate quota rows.
+The last shows Codex CLI usage, read from the tail of Codex's own session
 transcripts, with no network request. `install.sh` wires the command into
 `~/.claude/settings.json`. The same repository is published as the Claude Code plugin `quotaline`, and it's also its
 own marketplace (`quotaline@mlemes`), whose skills run `install.sh` for you. It's built to pair
@@ -85,7 +97,7 @@ flowchart LR
 - `claude.fmt_windows(session, week, labels=("session", "week")) -> str`: each window is `(used_pct, datetime | None) | None`. Joins with ` | `. A missing window prints `--` padded to full width. A `None` reset time prints `--` padded to the width of a real one (`claude.fmt_reset`).
 - `codex.latest_rate_limits(sessions: Path = SESSIONS) -> dict | None`: the `rate_limits` of the newest `token_count` event with `limit_id` `codex` or missing, each window given an epoch `resets_at` (converted from `resets_in_seconds` if needed). Never reads more than 256 KiB per file.
 - `codex.codex_line(sessions: Path = SESSIONS, now: float | None = None) -> str | None`: `None` when `sessions` isn't a directory, `Codex          no usage yet` when no event is found, otherwise one aligned line. Never raises; errors print `n/a (<ExceptionName>)`. `SESSIONS` is `$CODEX_HOME/sessions`, default `~/.codex/sessions`.
-- `antigravity.parse_summary(resp: dict) -> list[tuple[str, Window | None, Window | None]]`: one `(label, 5h, weekly)` per group in API order, where `Window = (used_pct, reset datetime)`. A missing `remainingFraction` counts as 100% used. Buckets without `resetTime` are skipped. Labels come from `GROUP_LABELS` by `bucketId` prefix, else `displayName`.
+- `antigravity.parse_summary(resp: dict) -> list[tuple[str, Window | None, Window | None]]`: one `(label, 5h, weekly)` per group in API order, where `Window = (used_pct, reset datetime)`. A missing `remainingFraction` counts as 100% used. Buckets without `resetTime` are skipped. Labels come from `GROUP_LABELS` by `bucketId` prefix (`gemini-argon-` before `gemini`), else `displayName`.
 - `antigravity.format_lines(groups) -> str`: one line per group joined by `\n`, or `Antigravity    no quota data`.
 - `antigravity.fetch_line() -> str`: fetches summary and optional Gemini model quotas; endpoint failures become labeled error rows while successful rows remain available. One HTTP 401 permits bounded agy-owned credential recovery. Authorization headers are not forwarded on redirects.
 - `antigravity.antigravity_line(cache: Path = CACHE, now: float | None = None) -> str`: returns multi-line text, throttles attempts for 60 seconds when writable, retains timestamped successful rows as stale on errors, and replaces cache files atomically.

@@ -25,12 +25,13 @@ from usage_statusline.claude import fmt_line, fmt_window, fmt_windows
 # Reviewer note: the token sent here is agy's Google OAuth token, and this Google host is its
 # issuer. Quota requests stay on this host. See README "Notes for reviewers".
 URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
+USER_AGENT = "antigravity/cli/1.4.2"
 CACHE_TTL = 60  # seconds; the status line runs far more often than this
 TIMEOUT = 2  # seconds per token lookup or quota request
 REFRESH_TIMEOUT = 10  # seconds; only after HTTP 401
 LABEL = "Antigravity"
 # Short labels by bucketId prefix; unknown groups fall back to the API displayName.
-GROUP_LABELS = {"gemini": "AG Gemini", "3p": "AG Claude/GPT"}
+GROUP_LABELS = {"gemini": "AG Gemini", "gemini-argon": "AG Argon", "3p": "AG Claude/GPT"}
 CONFIG = Path.home() / ".config" / "usage-statusline" / "agy_token_cmd"
 CACHE = Path.home() / ".cache" / "usage-statusline" / "antigravity.json"
 
@@ -53,7 +54,10 @@ def parse_summary(resp: dict) -> list[tuple[str, Window | None, Window | None]]:
                 used = 100 * (1 - fraction)
                 reset = datetime.fromisoformat(b["resetTime"].replace("Z", "+00:00"))
                 windows[b["window"]] = (used, reset)
-        prefix = (buckets[0].get("bucketId", "") if buckets else "").split("-")[0]
+        bucket_id = buckets[0].get("bucketId", "") if buckets else ""
+        prefix = (
+            "gemini-argon" if bucket_id.startswith("gemini-argon-") else bucket_id.split("-")[0]
+        )
         label = GROUP_LABELS.get(prefix) or g.get("displayName") or "AG ?"
         out.append((label, windows.get("5h"), windows.get("weekly")))
     return out
@@ -158,12 +162,13 @@ def fetch_line() -> str:
             nonlocal token, refreshed
             for attempt in range(2):
                 # Google returns 403 for the default Python-urllib User-Agent (seen 2026-09-27)
+                # The CLI User-Agent exposes Gemini and Argon groups omitted by bare antigravity.
                 req = urllib.request.Request(
                     URL.replace("retrieveUserQuotaSummary", endpoint),
                     data=b"{}",
                     headers={
                         "Content-Type": "application/json",
-                        "User-Agent": "antigravity",
+                        "User-Agent": USER_AGENT,
                     },
                 )
                 req.add_unredirected_header("Authorization", f"Bearer {token}")

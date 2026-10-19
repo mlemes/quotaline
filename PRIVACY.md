@@ -1,6 +1,6 @@
 # Privacy policy
 
-Effective date: October 17, 2026
+Effective date: October 18, 2026
 
 This policy covers the quotaline Claude Code plugin and the `usage-statusline` code it runs. The
 author, Marcus Lemes, doesn't operate any server for quotaline and doesn't receive any data from
@@ -45,7 +45,8 @@ quotaline writes only these files, all on your machine:
 
 - **Google.** When Antigravity is configured, quotaline sends its `agy` access token to
   `daily-cloudcode-pa.googleapis.com` for `retrieveUserQuotaSummary` and, when Gemini is
-  missing, `fetchAvailableModels`. Both requests have body `{}` and return quota/model data.
+  missing, `fetchAvailableModels`. Both requests have body `{}`, send
+  `User-Agent: antigravity/cli/1.4.2`, and return quota/model data.
   It runs one fetch cycle during setup and then at most once per 60 seconds when the cache is
   writable. An HTTP 401 permits one refresh attempt and one retry of the failed request.
   Google handles requests under its [privacy policy](https://policies.google.com/privacy).

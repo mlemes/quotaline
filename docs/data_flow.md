@@ -42,14 +42,17 @@ Field-level formats are in `docs/DATA.md`; components and decisions are in
    It is never written to disk, cached, printed, or put in an error row.
 3. **Trust boundary, process to Google.** `request(endpoint)` POSTs `{}` with
    `Authorization: Bearer <token>`, `Content-Type: application/json` and
-   `User-Agent: antigravity`, timeout 2 s, to:
+   `User-Agent: antigravity/cli/1.4.2`, timeout 2 s, to:
    - `https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`
    - `https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels`, only when the
      summary has no `AG Gemini` group or the summary request failed.
    The Authorization header is unredirected, so a redirect cannot forward the Bearer token.
    Responses are parsed as JSON (untrusted input) and never executed.
 4. Parsing: `parse_summary()` gives `(label, 5h, weekly)` per group, rendered by
-   `format_lines()`. Invalid fraction types, non-finite values and fractions outside `[0, 1]`
+   `format_lines()`. The `gemini-argon-` bucket prefix maps to `AG Argon` before generic Gemini
+   matching; unknown groups retain their display names. Argon's weekly-only bucket leaves
+   the session column empty. The CLI User-Agent exposes groups omitted by bare `antigravity`.
+   Invalid fraction types, non-finite values and fractions outside `[0, 1]`
    are skipped per bucket; missing summary fractions retain the exhausted interpretation. `parse_models()` keeps Gemini, non-internal models with a finite fraction in
    `[0, 1]` and a reset time, merges identical `(fraction, reset)` pairs, and renders `quota`
    rows (no weekly claim). Models with missing or invalid values are dropped, not shown as 0%.

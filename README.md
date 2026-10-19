@@ -144,8 +144,10 @@ once per 60 seconds when the cache is writable. A cache write failure does not h
   60 seconds when the cache is writable. A cycle calls
   `https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary` and, when
   Gemini is absent, `v1internal:fetchAvailableModels` on the same host. Both use `POST`, body
-  `{}`, `User-Agent: antigravity`, and the `agy` Google access token as a Bearer token. An
-  HTTP 401 can trigger one `agy models` refresh and one retry of the failed request. These
+  `{}`, `User-Agent: antigravity/cli/1.4.2`, and the `agy` Google access token as a Bearer token.
+  This header exposes the Gemini session/week and separate Argon weekly groups; the bare
+  `antigravity` header can omit both. An HTTP 401 can trigger one `agy models` refresh and one
+  retry of the failed request. These
   internal APIs can change without notice. Without a token command, no requests or refresh
   subprocesses run. quotaline has no telemetry; `agy` retains its own network/state behavior.
 

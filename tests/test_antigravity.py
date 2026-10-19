@@ -141,7 +141,53 @@ def test_fetch_sends_token_and_user_agent(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(ag.urllib.request, "urlopen", fake_urlopen)
     assert "AG Claude/GPT  session  25%" in ag.fetch_line()
     assert sent["Authorization"] == "Bearer ya29.abc"
-    assert sent["User-agent"] == "antigravity"  # default Python-urllib gets HTTP 403
+    assert sent["User-agent"] == "antigravity/cli/1.4.2"  # default Python-urllib gets HTTP 403
+
+
+ARGON_GROUP = {
+    "displayName": "Gemini 4 Argon",
+    "buckets": [
+        {
+            "bucketId": "gemini-argon-wtu-weekly",
+            "window": "weekly",
+            "resetTime": "2026-10-25T00:34:41Z",
+            "remainingFraction": 0,
+        }
+    ],
+}
+ARGON_RESP = {"groups": [RESP["groups"][0], RESP["groups"][1], ARGON_GROUP]}
+
+
+def test_parse_summary_argon_group_is_distinct() -> None:
+    groups = ag.parse_summary(ARGON_RESP)
+    assert [g[0] for g in groups] == ["AG Gemini", "AG Claude/GPT", "AG Argon"]
+    _, session, week = groups[2]
+    assert session is None
+    assert week is not None and week[0] == pytest.approx(100)
+
+
+def test_format_lines_argon_row_aligns_and_keeps_existing_groups() -> None:
+    lines = ag.format_lines(ag.parse_summary(ARGON_RESP)).splitlines()
+    assert len(lines) == 3
+    assert lines[0].startswith("AG Gemini      session   0%")
+    assert lines[1].startswith("AG Claude/GPT  session  25%")
+    assert lines[2].startswith("AG Argon")
+    assert "week 100%" in lines[2]
+    assert len({line.index("week") for line in lines}) == 1
+
+
+def test_no_models_request_when_summary_has_gemini_and_argon(monkeypatch) -> None:
+    monkeypatch.setenv("USAGE_STATUSLINE_AGY_TOKEN_CMD", "echo test-token")
+    urls = []
+
+    def respond(req, timeout):
+        urls.append(req.full_url)
+        return io.BytesIO(json.dumps(ARGON_RESP).encode())
+
+    monkeypatch.setattr(ag.urllib.request, "urlopen", respond)
+    result = ag.fetch_line()
+    assert len(urls) == 1 and urls[0].endswith("retrieveUserQuotaSummary")
+    assert "AG Gemini" in result and "AG Claude/GPT" in result and "AG Argon" in result
 
 
 def test_authorization_is_unredirected(monkeypatch: pytest.MonkeyPatch) -> None:
