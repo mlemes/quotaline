@@ -472,6 +472,31 @@ def test_global_errors_are_static_and_cached(setup, error, message, capsys):
     assert capsys.readouterr() == ("", "")
 
 
+@pytest.mark.parametrize(
+    "error",
+    [
+        urllib.error.URLError(ConnectionRefusedError("offline")),
+        ConnectionRefusedError("offline"),
+    ],
+)
+def test_loopback_connection_refusal_selects_native_mode(setup, error):
+    config, cache, _, _, fetch = setup
+    fetch.side_effect = error
+
+    assert o.omniroute_lines(config, cache, now=NOW) is None
+
+
+def test_connection_refusal_does_not_show_expired_stale_rows(setup):
+    config, cache, _, _, fetch = setup
+    o.omniroute_lines(config, cache, now=NOW)
+    fetch.side_effect = urllib.error.URLError(ConnectionRefusedError("offline"))
+
+    output = o.omniroute_lines(config, cache, now=NOW + o.CACHE_TTL)
+
+    assert output is None
+    assert "stale" not in cache.read_text()
+
+
 def test_cache_ttl_skips_key_read_and_refreshes_at_exact_boundary(setup):
     config, cache, _, key, fetch = setup
     output = o.omniroute_lines(config, cache, now=NOW)

@@ -7,9 +7,9 @@ Field-level formats are in `docs/DATA.md`; components and decisions are in
 ## 0. Source selection and optional OmniRoute path
 
 1. `main.main()` calls `omniroute.omniroute_lines()` before reading stdin. Only an absent
-   `~/.config/usage-statusline/omniroute.json` returns `None` and enters the native path below.
+   config or a refused loopback connection returns `None` and enters the native path below.
    Existing invalid/unreadable config prints a static configuration error. Router output and
-   unexpected adapter errors both return without touching native providers or stdin.
+   other adapter errors return without touching native providers or stdin.
 2. **Trust boundary, user config to selection.** `omniroute_lines` validates JSON object fields
    `key_file` and nonempty `connections[]`: exact supported `provider`, opaque `connection_id`
    and optional printable `alias`. Duplicate IDs/unknown fields/control characters fail.

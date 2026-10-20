@@ -1,9 +1,12 @@
 import io
 import json
+import urllib.error
+from unittest.mock import Mock
 
 import pytest
 
 from usage_statusline import main as m
+from usage_statusline import omniroute as o
 from usage_statusline.claude import fmt_line
 
 
@@ -76,6 +79,49 @@ def test_provider_failure_does_not_hide_codex(monkeypatch, capsys):
     assert lines[0].startswith("Claude")
     assert "n/a" in lines[1]
     assert lines[2] == "Codex  y"
+
+
+def test_connection_refusal_falls_through_to_all_native_readers(monkeypatch, capsys, tmp_path):
+    key = tmp_path / "key"
+    key.write_text("private-key")
+    config = tmp_path / "config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "key_file": str(key),
+                "connections": [{"provider": "codex", "connection_id": "selected"}],
+            }
+        )
+    )
+    cache = tmp_path / "cache.json"
+    monkeypatch.setattr(
+        m,
+        "omniroute_lines",
+        lambda: o.omniroute_lines(config, cache, now=1_800_000_000),
+    )
+    monkeypatch.setattr(
+        o,
+        "fetch_snapshot",
+        lambda _: (_ for _ in ()).throw(urllib.error.URLError(ConnectionRefusedError("offline"))),
+    )
+    claude = Mock(return_value="Claude  native")
+    antigravity = Mock(return_value="Antigravity  native")
+    codex = Mock(return_value="Codex  native")
+    monkeypatch.setattr(m, "claude_line", claude)
+    monkeypatch.setattr(m, "antigravity_line", antigravity)
+    monkeypatch.setattr(m, "codex_line", codex)
+    monkeypatch.setattr("sys.stdin", io.StringIO("{}"))
+
+    m.main()
+
+    claude.assert_called_once_with({})
+    antigravity.assert_called_once_with()
+    codex.assert_called_once_with()
+    assert capsys.readouterr().out.splitlines() == [
+        "Claude  native",
+        "Antigravity  native",
+        "Codex  native",
+    ]
 
 
 @pytest.mark.parametrize("unexpected_error", [False, True])
