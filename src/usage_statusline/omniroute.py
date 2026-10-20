@@ -11,6 +11,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+from usage_statusline.antigravity import antigravity_line
 from usage_statusline.claude import fmt_line, fmt_windows
 
 CONFIG = Path.home() / ".config" / "usage-statusline" / "omniroute.json"
@@ -196,7 +197,12 @@ def _printable(text: object) -> bool:
 
 def _load_config(text: str) -> tuple[dict, list[dict]]:
     data = json.loads(text)
-    if not isinstance(data, dict) or set(data) != {"key_file", "connections"}:
+    if (
+        not isinstance(data, dict)
+        or not {"key_file", "connections"} <= set(data)
+        or set(data) - {"key_file", "connections", "native_ag_argon_fallback"}
+        or type(data.get("native_ag_argon_fallback", False)) is not bool
+    ):
         raise ValueError
     key_file, connections = data["key_file"], data["connections"]
     if not _printable(key_file) or not key_file or not Path(key_file).expanduser().is_absolute():
@@ -305,6 +311,20 @@ def _error_line(message: str, label: str = "OmniRoute") -> str:
     return fmt_line(label, f"n/a ({message})")
 
 
+def _native_argon_row(tag: str) -> str | None:
+    """Keep native provenance and body; never substitute another native quota family."""
+    prefix = fmt_line("AG Argon", "")
+    try:
+        for row in antigravity_line().splitlines():
+            if row.startswith(prefix):
+                body = row[len(prefix) :]
+                if row.isprintable() and "%" in body and "n/a" not in body:
+                    return fmt_line("AG Argon local" + tag, body)
+    except Exception:
+        pass
+    return None
+
+
 def omniroute_lines(
     config: Path = CONFIG, cache: Path = CACHE, now: float | None = None
 ) -> str | None:
@@ -324,6 +344,10 @@ def omniroute_lines(
         return header + "\n" + _error_line(CONFIG_ERROR)
 
     now = time.time() if now is None else now
+    native_argon = (
+        data.get("native_ag_argon_fallback", False)
+        and sum(selection["provider"] == "agy" for selection in selections) == 1
+    )
     scope = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
     ids = {s["connection_id"] for s in selections}
     records: dict = {}
@@ -396,20 +420,55 @@ def omniroute_lines(
                         prefix = fmt_line(label + tag, "")
                         previous = (
                             next(
-                                (i for i, r in enumerate(record["rows"]) if r.startswith(prefix)),
+                                (
+                                    i
+                                    for i, r in enumerate(record["rows"])
+                                    if r.startswith(prefix)
+                                    and not (
+                                        native_argon
+                                        and label == "AG Argon"
+                                        and ("n/a" in r or "no quota data" in r)
+                                    )
+                                ),
                                 None,
                             )
                             if record
                             else None
                         )
                         if record is None or previous is None:
-                            rendered.append(_error_line(QUOTA_ERROR, label + tag))
-                            continue
-                        row = record["rows"][previous]
-                        received = record.get(
-                            "row_times", [record["received_at"]] * len(record["rows"])
-                        )[previous]
-                        rendered.extend(_stale({"rows": [row], "received_at": received}))
+                            local = (
+                                _native_argon_row(tag)
+                                if native_argon
+                                and label == "AG Argon"
+                                and matches[0].get("provider") == "agy"
+                                else None
+                            )
+                            if local is not None:
+                                row, received, fresh = local, now, True
+                                rendered.append(row)
+                            else:
+                                local_prefix = fmt_line("AG Argon local" + tag, "")
+                                previous = (
+                                    next(
+                                        (
+                                            i
+                                            for i, r in enumerate(record["rows"])
+                                            if r.startswith(local_prefix)
+                                        ),
+                                        None,
+                                    )
+                                    if record and native_argon and label == "AG Argon"
+                                    else None
+                                )
+                                if record is None or previous is None:
+                                    rendered.append(_error_line(QUOTA_ERROR, label + tag))
+                                    continue
+                        if record is not None and previous is not None:
+                            row = record["rows"][previous]
+                            received = record.get(
+                                "row_times", [record["received_at"]] * len(record["rows"])
+                            )[previous]
+                            rendered.extend(_stale({"rows": [row], "received_at": received}))
                     else:
                         fresh = True
                         received = now

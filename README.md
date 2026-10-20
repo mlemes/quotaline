@@ -116,10 +116,19 @@ native Antigravity setup, then:
    `alias` appears after each label. Connection IDs select accounts; response order and the
    router's preferred account do not. No provider credentials are copied.
 
-When this file exists, the status line uses only OmniRoute, including on errors. It does not
+By default, when this file exists, the status line uses only OmniRoute, including on errors. It does not
 read Claude stdin usage, Codex transcripts or the Antigravity keyring, and does not run native
 quota requests or credential recovery. Invalid config produces a visible configuration error.
 Remove or rename the file to restore native mode; native configuration and caches are kept.
+
+If OmniRoute omits Argon, you can explicitly add `"native_ag_argon_fallback": true` to this
+config. Use this only when local `agy` and the single selected OmniRoute `agy` connection
+use the same account: quotaline cannot match their account identities. The default is `false`.
+This fallback requires native Antigravity setup and can run its quota requests and credential
+recovery. It substitutes only a missing Argon row without a usable router-cached Argon value,
+labels it `AG Argon local` with the selected alias, and preserves its native stale annotation.
+It never copies native Gemini or Claude/GPT rows, and is disabled when multiple `agy`
+connections are selected. Native failures retain the router error or previous local stale row.
 
 quotaline makes one authenticated GET to
 `http://127.0.0.1:20128/api/usage/om-usage?format=json`, with a two-second timeout, no proxy

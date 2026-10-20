@@ -5,8 +5,19 @@
 `main.py` calls `omniroute.omniroute_lines()` before reading stdin. Absence of
 `~/.config/usage-statusline/omniroute.json` returns `None` and preserves the native path
 described below. An existing config selects only its mapped OmniRoute connections; output
-or failure returns immediately without native readers. This avoids assuming that a router
+or failure returns immediately without native readers by default. This avoids assuming that a router
 account matches a native account. A malformed config is an error, not fallback.
+
+The optional boolean `native_ag_argon_fallback` defaults to false and is strictly validated.
+When explicitly enabled with exactly one selected `agy` connection, an unavailable Argon row
+without usable router-cached history can use only the Argon row from
+`antigravity.antigravity_line()`. `_native_argon_row()` catches native failures, filters out
+unavailable rows, and preserves the body and native stale annotation under `AG Argon local`
+plus the selected alias. No native Gemini or Claude/GPT row is substituted. Native quota
+requests and credential recovery can run in this opt-in mode. Account identity cannot be
+matched across sources; operators must ensure local `agy` and the selected router account
+are the same. Multiple selected AG accounts disable this fallback. Local rows share the
+existing per-row cache validation and throttle, and retain stale history on later failures.
 
 `omniroute.py` owns config/key validation, a fixed authenticated loopback GET, exact
 connection/provider matching, quota conversion and its separate private cache. It uses only

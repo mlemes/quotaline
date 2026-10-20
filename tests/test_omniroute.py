@@ -177,6 +177,167 @@ def test_ag_never_arbitrarily_picks_family_candidate(setup, snapshot, change):
     assert lines[ok] == FRESH[ok] and lines["AG Argon"] == FRESH["AG Argon"]
 
 
+def test_argon_native_fallback_is_disabled_by_default(setup, snapshot, monkeypatch):
+    config, cache, _, _, _ = setup
+    item, _ = selected(snapshot, "agy")
+    del item["quotas"]["gemini_4_argon_weekly"]
+    native = Mock(return_value=FRESH["AG Argon"])
+    monkeypatch.setattr(o, "antigravity_line", native, raising=False)
+
+    lines = ag_lines(o.omniroute_lines(config, cache, now=NOW))
+
+    native.assert_not_called()
+    assert lines["AG Argon"] == fmt_line("AG Argon", QUOTA_NA)
+
+
+def test_argon_native_fallback_relabels_only_argon_and_preserves_body(setup, snapshot, monkeypatch):
+    config, cache, data, _, _ = setup
+    data["native_ag_argon_fallback"] = True
+    data["connections"][1]["alias"] = "work"
+    config.write_text(json.dumps(data))
+    item, _ = selected(snapshot, "agy")
+    del item["quotas"]["gemini_4_argon_weekly"]
+    native_argon = fmt_line("AG Argon", "week  88% · resets Sun 12:00 · stale (updated Sun 11:00)")
+    native = Mock(
+        return_value="\n".join(
+            [FRESH["AG Gemini"], FRESH["AG Claude/GPT"], native_argon, "Antigravity  n/a"]
+        )
+    )
+    monkeypatch.setattr(o, "antigravity_line", native, raising=False)
+
+    output = o.omniroute_lines(config, cache, now=NOW)
+
+    native.assert_called_once_with()
+    assert fmt_line("AG Gemini [work]", FRESH["AG Gemini"][15:]) in output.splitlines()
+    assert fmt_line("AG Claude/GPT [work]", FRESH["AG Claude/GPT"][15:]) in output.splitlines()
+    assert "AG Gemini  " not in output
+    assert "AG Claude/GPT  " not in output
+    assert fmt_line("AG Argon local [work]", native_argon[15:]) in output.splitlines()
+    assert "Antigravity" not in output
+
+
+def test_cached_router_argon_precedes_native_fallback(setup, snapshot, monkeypatch):
+    config, cache, data, _, _ = setup
+    data["native_ag_argon_fallback"] = True
+    config.write_text(json.dumps(data))
+    o.omniroute_lines(config, cache, now=NOW)
+    item, _ = selected(snapshot, "agy")
+    del item["quotas"]["gemini_4_argon_weekly"]
+    native = Mock(return_value=FRESH["AG Argon"])
+    monkeypatch.setattr(o, "antigravity_line", native, raising=False)
+
+    output = o.omniroute_lines(config, cache, now=NOW + 60)
+
+    native.assert_not_called()
+    marker = datetime.fromtimestamp(NOW).strftime("%Y-%m-%d %H:%M")
+    assert f"{FRESH['AG Argon']} · stale (received {marker})" in output
+    assert "AG Argon local" not in output
+
+
+def test_cached_argon_error_does_not_block_native_fallback(setup, snapshot, monkeypatch):
+    config, cache, data, _, _ = setup
+    data["native_ag_argon_fallback"] = True
+    config.write_text(json.dumps(data))
+    o.omniroute_lines(config, cache, now=NOW)
+    stored = json.loads(cache.read_text())
+    record = stored["connections"]["test-agy-connection"]
+    argon_index = next(i for i, row in enumerate(record["rows"]) if row.startswith("AG Argon"))
+    record["rows"][argon_index] = fmt_line("AG Argon", QUOTA_NA)
+    cache.write_text(json.dumps(stored))
+    item, _ = selected(snapshot, "agy")
+    del item["quotas"]["gemini_4_argon_weekly"]
+    local_argon = fmt_line("AG Argon", "week  88% · resets Sun 12:00")
+    native = Mock(return_value=local_argon)
+    monkeypatch.setattr(o, "antigravity_line", native, raising=False)
+
+    output = o.omniroute_lines(config, cache, now=NOW + 60)
+
+    native.assert_called_once_with()
+    assert fmt_line("AG Argon local", local_argon[15:]) in output.splitlines()
+    assert "stale" not in next(line for line in output.splitlines() if "AG Argon local" in line)
+
+
+def test_cached_native_argon_is_retained_stale_when_later_unavailable(setup, snapshot, monkeypatch):
+    config, cache, data, _, _ = setup
+    data["native_ag_argon_fallback"] = True
+    config.write_text(json.dumps(data))
+    item, _ = selected(snapshot, "agy")
+    del item["quotas"]["gemini_4_argon_weekly"]
+    local_argon = fmt_line("AG Argon", "week  88% · resets Sun 12:00")
+    native = Mock(side_effect=[local_argon, "Antigravity  n/a (no token)"])
+    monkeypatch.setattr(o, "antigravity_line", native, raising=False)
+    first = o.omniroute_lines(config, cache, now=NOW)
+    assert fmt_line("AG Argon local", local_argon[15:]) in first.splitlines()
+
+    later = o.omniroute_lines(config, cache, now=NOW + 60)
+
+    assert native.call_count == 2
+    marker = datetime.fromtimestamp(NOW).strftime("%Y-%m-%d %H:%M")
+    assert f"{fmt_line('AG Argon local', local_argon[15:])} · stale (received {marker})" in later
+    assert fmt_line("AG Argon", QUOTA_NA) not in later
+
+
+@pytest.mark.parametrize("native_output", ["", fmt_line("AG Argon", "n/a (quota unavailable)")])
+def test_unavailable_native_argon_leaves_router_error(setup, snapshot, monkeypatch, native_output):
+    config, cache, data, _, _ = setup
+    data["native_ag_argon_fallback"] = True
+    config.write_text(json.dumps(data))
+    item, _ = selected(snapshot, "agy")
+    del item["quotas"]["gemini_4_argon_weekly"]
+    monkeypatch.setattr(o, "antigravity_line", Mock(return_value=native_output), raising=False)
+
+    lines = ag_lines(o.omniroute_lines(config, cache, now=NOW))
+
+    assert lines["AG Argon"] == fmt_line("AG Argon", QUOTA_NA)
+    assert "AG Argon local" not in lines
+
+
+def test_argon_native_fallback_requires_one_selected_ag_connection(setup, snapshot, monkeypatch):
+    config, cache, data, _, _ = setup
+    data["native_ag_argon_fallback"] = True
+    data["connections"].append({"provider": "agy", "connection_id": "second-agy-connection"})
+    config.write_text(json.dumps(data))
+    item, _ = selected(snapshot, "agy")
+    item["quotas"].pop("gemini_4_argon_weekly")
+    second = copy.deepcopy(item)
+    second["connectionId"] = "second-agy-connection"
+    snapshot["providers"].append(second)
+    native = Mock(return_value=FRESH["AG Argon"])
+    monkeypatch.setattr(o, "antigravity_line", native, raising=False)
+
+    output = o.omniroute_lines(config, cache, now=NOW)
+
+    native.assert_not_called()
+    assert output.count(fmt_line("AG Argon", QUOTA_NA)) == 2
+
+
+def test_argon_native_fallback_does_not_hide_live_provider_mismatch(setup, snapshot, monkeypatch):
+    config, cache, data, _, _ = setup
+    data["native_ag_argon_fallback"] = True
+    config.write_text(json.dumps(data))
+    item, _ = selected(snapshot, "agy")
+    item["provider"] = "claude"
+    item["quotas"].pop("gemini_4_argon_weekly")
+    native = Mock(return_value=FRESH["AG Argon"])
+    monkeypatch.setattr(o, "antigravity_line", native, raising=False)
+
+    output = o.omniroute_lines(config, cache, now=NOW)
+
+    native.assert_not_called()
+    assert fmt_line("AG", "n/a (selected connection unavailable)") in output.splitlines()
+    assert "AG Argon local" not in output
+
+
+@pytest.mark.parametrize("value", [None, 1, "true", [], {}])
+def test_native_ag_argon_fallback_config_requires_boolean(setup, value):
+    config, cache, data, _, fetch = setup
+    data["native_ag_argon_fallback"] = value
+    config.write_text(json.dumps(data))
+
+    assert o.omniroute_lines(config, cache, now=NOW) == HEADER + "\n" + CONFIG_ERROR
+    fetch.assert_not_called()
+
+
 def test_ag_equivalent_aware_resets_and_unknown_keys_are_accepted(snapshot):
     item, selection = selected(snapshot, "agy")
     before = o.parse_connection(item, selection)

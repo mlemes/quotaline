@@ -39,6 +39,15 @@ Field-level formats are in `docs/DATA.md`; components and decisions are in
    weekly keys or empty session families become `None` (displayed as `--`); malformed or
    inconsistent present values fail only that row. Two absent windows also fail the row.
    Argon has weekly only. Past resets retain historical usage.
+   The strictly boolean config option `native_ag_argon_fallback` defaults to false. If enabled
+   with exactly one selected `agy` connection, an unavailable Argon row without usable
+   router-cached history calls `_native_argon_row(tag)`, which reads `antigravity_line()`.
+   This crosses into native credential/quota handling and can trigger credential recovery.
+   Only a usable `AG Argon` row is copied: its body and native stale marker remain, with label
+   `AG Argon local` and the selected alias. Native failures leave the router error or retain
+   previous local history. Account identities cannot be matched; explicit opt-in is safe only
+   when local `agy` and the selected OmniRoute AG account are the same. Multiple selected
+   `agy` connections disable the fallback; native Gemini and Claude/GPT rows are ignored.
 7. A successful selected connection replaces its cached complete result and local receipt.
    Missing/invalid connections retain only their own previous complete result with
    `stale (received YYYY-MM-DD HH:MM)` and current error. Global HTTP/parse failures may retain
@@ -48,6 +57,9 @@ Field-level formats are in `docs/DATA.md`; components and decisions are in
    stale rows accompany one `AG` error. Aliases apply to these labels. Failures never advance
    the failed row's receipt time. HTTP 401/403 and other failures become static messages;
    response bodies, identity fields and exception text are never displayed.
+   Opted-in local Argon rows use the same validated cache records and per-row timestamps;
+   later native failures retain them with a stale receipt marker. Available router Argon
+   always takes precedence, including its usable cached history.
 8. Writes version, scope fingerprint, `attempted_at`, rendered `line`, and successful selected
    connection `rows`/`received_at` (plus AG per-row `row_times`) to a sibling private 0600
    temporary file, then atomically
