@@ -23,7 +23,7 @@ CONFIG_ERROR = "configuration error; check omniroute.json"
 UNAVAILABLE = "selected connection unavailable"
 QUOTA_ERROR = "quota unavailable or inconsistent"
 FETCH_FAILED = "fetch failed"
-PROVIDERS = {"claude": "Claude", "codex": "Codex", "agy": "Antigravity"}
+PROVIDERS = {"claude": "Claude", "codex": "Codex", "agy": "AG"}
 TOLERANCE = 1e-8
 MAX_BODY = 4 * 1024 * 1024
 
@@ -115,24 +115,29 @@ def _codex_rows(quotas: dict, tag: str) -> list[str]:
     return [fmt_line("Codex" + tag, body)]
 
 
-def _ag_rows(quotas: dict, tag: str) -> list[str]:
-    def family(include) -> tuple[float, datetime]:
-        return _collapse([_ag_window(m) for k, m in quotas.items() if include(k)])
+def _ag_rows(quotas: dict, tag: str, label: str | None = None) -> list[str]:
+    rows = []
+    for name, key, prefixes in (
+        ("AG Gemini", "gemini_weekly", ("gemini-",)),
+        ("AG Claude/GPT", "claude_gpt_weekly", ("claude-", "gpt-")),
+        ("AG Argon", "gemini_4_argon_weekly", ()),
+    ):
+        if label is not None and name != label:
+            continue
+        candidates = [
+            _ag_window(m)
+            for k, m in quotas.items()
+            if k.startswith(prefixes) and not k.startswith("gemini-4-argon-")
+        ]
+        session = _collapse(candidates) if candidates else None
+        week = _ag_window(quotas[key]) if key in quotas else None
+        if session is None and week is None:
+            raise ValueError(QUOTA_ERROR)
+        rows.append(fmt_line(name + tag, fmt_windows(session, week)))
+    return rows
 
-    gemini = family(lambda k: k.startswith("gemini-") and not k.startswith("gemini-4-argon-"))
-    claude_gpt = family(lambda k: k.startswith(("claude-", "gpt-")))
-    gemini_week, claude_gpt_week, argon_week = (
-        _ag_window(quotas.get(key))
-        for key in ("gemini_weekly", "claude_gpt_weekly", "gemini_4_argon_weekly")
-    )
-    return [
-        fmt_line("AG Gemini" + tag, fmt_windows(gemini, gemini_week)),
-        fmt_line("AG Claude/GPT" + tag, fmt_windows(claude_gpt, claude_gpt_week)),
-        fmt_line("AG Argon" + tag, fmt_windows(None, argon_week)),
-    ]
 
-
-def parse_connection(snapshot: dict, selection: dict) -> list[str]:
+def parse_connection(snapshot: dict, selection: dict, ag_label: str | None = None) -> list[str]:
     """Validated rows for the selected connection; ValueError carries only a static message."""
     if (
         not isinstance(snapshot, dict)
@@ -145,7 +150,9 @@ def parse_connection(snapshot: dict, selection: dict) -> list[str]:
         quotas = snapshot.get("quotas")
         if not isinstance(quotas, dict):
             raise ValueError(QUOTA_ERROR)
-        build = {"claude": _claude_rows, "codex": _codex_rows, "agy": _ag_rows}
+        if selection["provider"] == "agy":
+            return _ag_rows(quotas, tag, ag_label)
+        build = {"claude": _claude_rows, "codex": _codex_rows}
         return build[selection["provider"]](quotas, tag)
     except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
         raise ValueError(QUOTA_ERROR) from None
@@ -253,15 +260,26 @@ def _read_cache(cache: Path, scope: str, ids: set[str], now: float) -> tuple[flo
                 and received <= now
                 and datetime.fromtimestamp(received)
             ):
-                records[ident] = {"rows": rows, "received_at": received}
+                row_times = record.get("row_times", [received] * len(rows))
+                if not isinstance(row_times, list) or len(row_times) != len(rows):
+                    continue
+                if not all(
+                    _timestamp(t) and t <= now and datetime.fromtimestamp(t) for t in row_times
+                ):
+                    continue
+                records[ident] = {"rows": rows, "received_at": received, "row_times": row_times}
         except (TypeError, KeyError, OverflowError, OSError, ValueError):
             continue
     return stored["attempted_at"], line, records
 
 
 def _stale(record: dict) -> list[str]:
-    marker = datetime.fromtimestamp(record["received_at"]).strftime("%Y-%m-%d %H:%M")
-    return [f"{row} · stale (received {marker})" for row in record["rows"]]
+    rows = []
+    times = record.get("row_times", [record["received_at"]] * len(record["rows"]))
+    for row, received in zip(record["rows"], times, strict=True):
+        marker = datetime.fromtimestamp(received).strftime("%Y-%m-%d %H:%M")
+        rows.append(f"{row} · stale (received {marker})")
+    return rows
 
 
 def _write_cache(cache: Path, payload: dict) -> None:
@@ -328,6 +346,9 @@ def omniroute_lines(
                     tag = f" [{selection['alias']}]" if selection.get("alias") else ""
                     for message in (UNAVAILABLE, QUOTA_ERROR):
                         allowed.add(_error_line(message, PROVIDERS[selection["provider"]] + tag))
+                    if selection["provider"] == "agy":
+                        for label in ("AG Gemini", "AG Claude/GPT", "AG Argon"):
+                            allowed.add(_error_line(QUOTA_ERROR, label + tag))
                     record = prior.get(selection["connection_id"])
                     if record:
                         allowed.update(record["rows"])
@@ -364,6 +385,42 @@ def omniroute_lines(
         try:
             if len(matches) != 1:
                 raise ValueError(UNAVAILABLE)
+            if selection["provider"] == "agy":
+                tag = f" [{selection['alias']}]" if selection.get("alias") else ""
+                rows, row_times, rendered = [], [], []
+                fresh = False
+                for label in ("AG Gemini", "AG Claude/GPT", "AG Argon"):
+                    try:
+                        row = parse_connection(matches[0], selection, label)[0]
+                    except ValueError:
+                        prefix = fmt_line(label + tag, "")
+                        previous = (
+                            next(
+                                (i for i, r in enumerate(record["rows"]) if r.startswith(prefix)),
+                                None,
+                            )
+                            if record
+                            else None
+                        )
+                        if record is None or previous is None:
+                            rendered.append(_error_line(QUOTA_ERROR, label + tag))
+                            continue
+                        row = record["rows"][previous]
+                        received = record.get(
+                            "row_times", [record["received_at"]] * len(record["rows"])
+                        )[previous]
+                        rendered.extend(_stale({"rows": [row], "received_at": received}))
+                    else:
+                        fresh = True
+                        received = now
+                        rendered.append(row)
+                    rows.append(row)
+                    row_times.append(received)
+                if not fresh:
+                    parse_connection(matches[0], selection)
+                lines.extend(rendered)
+                connections[ident] = {"rows": rows, "received_at": now, "row_times": row_times}
+                continue
             rows = parse_connection(matches[0], selection)
         except ValueError as error:
             message = str(error) if str(error) == UNAVAILABLE else QUOTA_ERROR

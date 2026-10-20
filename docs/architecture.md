@@ -23,16 +23,21 @@ Static errors cannot expose response bodies, key material or connection identiti
 
 Claude and Codex quota aggregates use percent units. Codex `windowSeconds` controls column
 placement and duration labels. AG uses precise `remainingPercentage`, requires agreement
-across each session family and uses the explicit three weekly keys. Argon remains weekly
-only. Invalid/missing required AG values fail that complete connection rather than mix
-windows or choose an arbitrary model. Live quota coverage was verified October 18–19, 2026;
-it supersedes the initial source-level concern about missing AG weekly aggregates.
+across each session family and uses explicit weekly keys when present. Argon remains weekly
+only. Each AG row is parsed independently: absent windows display `--`, while malformed or
+inconsistent values, or two absent windows, fail that row. No arbitrary model is selected.
+`parse_connection` can validate one AG label; its default still validates all selected rows.
 
 `~/.cache/usage-statusline/omniroute.json` stores only selected formatted rows, opaque IDs,
 local receipt/attempt times and a configuration fingerprint. Successful and failed attempts
 are throttled 60 s; config changes invalidate scope. Atomic 0600 replacement and optional writes
 preserve output when storage fails. Partial failures retain only that connection's previous
 complete rows with `stale (received …)` and current error; successful connections update.
+Within AG, successful rows refresh independently and failed rows retain their own cached
+value and receipt time (`row_times`), or show a row-specific error without history. If every
+AG row fails or its connection is unavailable, stale rows accompany one `AG` error. Aliases
+apply to row and error labels. Cache-hit validation accepts these row errors and stale rows;
+older records without `row_times` use the connection receipt time for each row.
 The header always says `upstream age unknown`. A cached GET supplies no upstream observation
 time, so receipt/reset time never proves freshness and past resets never fabricate 0% usage.
 
@@ -137,9 +142,9 @@ flowchart LR
 | `.claude-plugin/`, `skills/`, `hooks/` | Plugin manifest, `mlemes` marketplace, install and uninstall skills, and the sync hook | built (2 tests in `test_plugin.py`), `claude plugin validate .` passes |
 
 ### Public API of what is built
-- `omniroute.omniroute_lines(config: Path = CONFIG, cache: Path = CACHE, now: float | None = None) -> str | None`: `None` only for absent config; otherwise one source header, selected rows and sanitized errors, with 60 s attempt throttle and per-connection stale retention.
+- `omniroute.omniroute_lines(config: Path = CONFIG, cache: Path = CACHE, now: float | None = None) -> str | None`: `None` only for absent config; otherwise one source header, selected rows and sanitized errors, with 60 s attempt throttle and per-connection stale retention and independent AG row receipts.
 - `omniroute.fetch_snapshot(key: str) -> dict`: fixed loopback authenticated GET, validates allowed/object/providers shape, no proxy or redirect.
-- `omniroute.parse_connection(snapshot: dict, selection: dict) -> list[str]`: exact identity/provider and quota validation, shared formatting, or `ValueError` for unavailable/inconsistent data.
+- `omniroute.parse_connection(snapshot: dict, selection: dict, ag_label: str | None = None) -> list[str]`: exact identity/provider and quota validation, shared formatting, or `ValueError` for unavailable/inconsistent data.
 - `claude.claude_line(data: dict) -> str`: never raises on missing fields.
 - `claude.LABEL_WIDTH = 15`: every line pads its label to this width.
 - `claude.fmt_window(label: str, used_pct: float, resets_at: datetime) -> str`: `"week  41% · resets Thu 09:00"` in local time, percent right-aligned to 3 digits.

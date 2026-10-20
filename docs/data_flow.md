@@ -18,6 +18,8 @@ Field-level formats are in `docs/DATA.md`; components and decisions are in
    and finite nonfuture `attempted_at` within 60 s permits a cached result. Successful records
    preserve pristine selected rows and `received_at`; malformed cache is ignored. The
    fingerprint includes selection order, aliases and key-file path, never key content.
+   AG row receipt times are validated independently; older records use their connection
+   receipt time. Cache-hit validation accepts row-specific errors and stale rows.
 4. **Trust boundary, private key file to process memory.** On a cache miss, the referenced
    key file is read and validated as one nonempty key line. Key bytes remain in local memory;
    they never enter cache, argv, URL, error text or logs. No provider credentials are read.
@@ -32,16 +34,23 @@ Field-level formats are in `docs/DATA.md`; components and decisions are in
    unselected accounts are ignored. `parse_connection(snapshot, selection)` validates finite
    numeric quota fields and timezone-aware ISO resets, then reuses `fmt_line`/`fmt_windows`.
    Claude uses percent aggregates; Codex placement/labels follow `windowSeconds`; AG derives
-   used percent from `remainingPercentage`, requires agreeing session model pairs and explicit
-   weekly keys. Argon has weekly only. Past resets retain historical usage.
+   used percent from `remainingPercentage` and requires agreeing session model pairs.
+   AG rows are parsed independently by passing their label to `parse_connection`: absent
+   weekly keys or empty session families become `None` (displayed as `--`); malformed or
+   inconsistent present values fail only that row. Two absent windows also fail the row.
+   Argon has weekly only. Past resets retain historical usage.
 7. A successful selected connection replaces its cached complete result and local receipt.
    Missing/invalid connections retain only their own previous complete result with
    `stale (received YYYY-MM-DD HH:MM)` and current error. Global HTTP/parse failures may retain
-   all matching previous selected results. Failures never advance receipt time or combine
-   different observations into one connection. HTTP 401/403 and other failures become static
-   messages; response bodies, identity fields and exception text are never displayed.
+   all matching previous selected results. Within AG, fresh rows update independently;
+   failed rows retain their own cached value and receipt time with a stale marker, or show
+   a row-specific error without history. If every AG row fails or its connection is unavailable,
+   stale rows accompany one `AG` error. Aliases apply to these labels. Failures never advance
+   the failed row's receipt time. HTTP 401/403 and other failures become static messages;
+   response bodies, identity fields and exception text are never displayed.
 8. Writes version, scope fingerprint, `attempted_at`, rendered `line`, and successful selected
-   connection `rows`/`received_at` to a sibling private 0600 temporary file, then atomically
+   connection `rows`/`received_at` (plus AG per-row `row_times`) to a sibling private 0600
+   temporary file, then atomically
    replaces cache and cleans up temporary files. Storage errors do not hide fresh output;
    without writable cache later calls may fetch again. No raw snapshot, key/path or unselected
    account is stored.

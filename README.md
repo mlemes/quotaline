@@ -131,9 +131,13 @@ no inference call or provider refresh.
 The header says `OmniRoute … upstream age unknown`: receipt time does not establish provider
 freshness. Failed connections can retain their last complete rows with
 `stale (received YYYY-MM-DD HH:MM)` alongside the error, while healthy connections update.
-Past reset times do not turn historical percentages into zero. Missing or disagreeing
-Antigravity family quotas produce an error; Argon uses only its explicit weekly meter and
-has no session. Codex labels longer windows by duration, such as `30d`.
+Past reset times do not turn historical percentages into zero. AG Gemini, AG Claude/GPT
+and AG Argon update independently: absent windows display `--`; malformed or disagreeing
+values, or two absent windows, fail only that row. Failed rows retain their own cached value
+and receipt time with a stale marker, or show a row-specific error without history. If all
+AG rows fail or the connection is unavailable, cached rows remain alongside an `AG` error.
+Argon uses only its explicit weekly meter and has no session. Codex labels longer windows
+by duration, such as `30d`.
 
 The private cache is `~/.cache/usage-statusline/omniroute.json`; it stores only selected
 formatted rows, opaque connection IDs, a configuration fingerprint and local timestamps.

@@ -50,11 +50,35 @@ def selected(snapshot, provider):
     return item, {"provider": provider, "connection_id": item["connectionId"]}
 
 
+QUOTA_NA = "n/a (quota unavailable or inconsistent)"
+GEMINI_ERROR = fmt_line("AG Gemini", QUOTA_NA)
+
+
 def row(label, first, second, labels=("session", "week")):
     def window(value):
         return None if value is None else (value[0], datetime.fromisoformat(value[1]))
 
     return fmt_line(label, fmt_windows(window(first), window(second), labels))
+
+
+FRESH = {
+    "AG Gemini": row(
+        "AG Gemini", (18.02083, "2026-10-19T05:15:15Z"), (6.20262, "2026-10-24T02:56:06Z")
+    ),
+    "AG Claude/GPT": row(
+        "AG Claude/GPT", (0.0012, "2026-10-19T07:26:06Z"), (0.33808, "2026-10-21T15:34:26Z")
+    ),
+    "AG Argon": row("AG Argon", None, (100, "2026-10-25T00:34:41Z")),
+}
+
+
+def ag_lines(output):
+    """Map AG label (text before the first two-space gap) to full line."""
+    return {
+        line.split("  ")[0].strip(): line
+        for line in output.splitlines()
+        if line.startswith(("AG", "Antigravity"))
+    }
 
 
 def test_fixture_preserves_percentages_resets_and_argon_separation(snapshot):
@@ -116,9 +140,6 @@ def test_claude_rejects_invalid_quota(snapshot, field, value):
     [
         ("claude", "session (5h)"),
         ("claude", "weekly (7d)"),
-        ("agy", "gemini_weekly"),
-        ("agy", "claude_gpt_weekly"),
-        ("agy", "gemini_4_argon_weekly"),
     ],
 )
 def test_missing_required_meter_is_invalid(snapshot, provider, key):
@@ -129,31 +150,31 @@ def test_missing_required_meter_is_invalid(snapshot, provider, key):
 
 
 @pytest.mark.parametrize("value", [None, True, "80", -1, 101, float("nan"), float("inf")])
-def test_ag_requires_valid_authoritative_remaining(snapshot, value):
-    item, selection = selected(snapshot, "agy")
+def test_ag_requires_valid_authoritative_remaining(setup, snapshot, value):
+    config, cache, _, _, _ = setup
+    item, _ = selected(snapshot, "agy")
     item["quotas"]["gemini_weekly"]["remainingPercentage"] = value
-    with pytest.raises(ValueError):
-        o.parse_connection(item, selection)
+    lines = ag_lines(o.omniroute_lines(config, cache, now=NOW))
+    assert lines["AG Gemini"] == GEMINI_ERROR
+    assert (
+        lines["AG Claude/GPT"] == FRESH["AG Claude/GPT"] and lines["AG Argon"] == FRESH["AG Argon"]
+    )
 
 
-@pytest.mark.parametrize("change", ["percent", "reset", "missing_family", "argon_only"])
-def test_ag_never_arbitrarily_picks_family_candidate(snapshot, change):
-    item, selection = selected(snapshot, "agy")
+@pytest.mark.parametrize("change", ["percent", "reset"])
+def test_ag_never_arbitrarily_picks_family_candidate(setup, snapshot, change):
+    config, cache, _, _, _ = setup
+    item, _ = selected(snapshot, "agy")
     quotas = item["quotas"]
     if change == "percent":
         quotas["gemini-3.8-flash-high"]["remainingPercentage"] -= 1
-    elif change == "reset":
-        quotas["gpt-oss-120b-medium"]["resetAt"] = "2026-10-20T00:00:00Z"
+        failed, ok = "AG Gemini", "AG Claude/GPT"
     else:
-        for key in list(quotas):
-            if key.startswith("gemini-") and not key.startswith("gemini-4-argon-"):
-                del quotas[key]
-        if change == "missing_family":
-            for key in list(quotas):
-                if key.startswith(("claude-", "gpt-")):
-                    del quotas[key]
-    with pytest.raises(ValueError):
-        o.parse_connection(item, selection)
+        quotas["gpt-oss-120b-medium"]["resetAt"] = "2026-10-20T00:00:00Z"
+        failed, ok = "AG Claude/GPT", "AG Gemini"
+    lines = ag_lines(o.omniroute_lines(config, cache, now=NOW))
+    assert lines[failed] == fmt_line(failed, QUOTA_NA)
+    assert lines[ok] == FRESH[ok] and lines["AG Argon"] == FRESH["AG Argon"]
 
 
 def test_ag_equivalent_aware_resets_and_unknown_keys_are_accepted(snapshot):
@@ -751,3 +772,125 @@ def test_unrepresentable_stale_receipt_does_not_hide_fresh_healthy_account(setup
     assert "selected connection unavailable" in output
     assert "session  78%" in output and "AG Argon" in output
     assert "session   1%" not in output
+
+
+def run(setup, snapshot, mutate, now=NOW):
+    config, cache, _, _, _ = setup
+    item, _ = selected(snapshot, "agy")
+    mutate(item["quotas"])
+    return o.omniroute_lines(config, cache, now=now)
+
+
+def test_missing_gemini_weekly_only_blanks_that_window(setup, snapshot):
+    output = run(setup, snapshot, lambda q: q.pop("gemini_weekly"))
+    lines = ag_lines(output)
+    assert lines["AG Gemini"] == row("AG Gemini", (18.02083, "2026-10-19T05:15:15Z"), None)
+    assert (
+        lines["AG Claude/GPT"] == FRESH["AG Claude/GPT"] and lines["AG Argon"] == FRESH["AG Argon"]
+    )
+    assert "n/a" not in output and "stale" not in output
+
+
+def test_missing_argon_weekly_fails_only_argon_row(setup, snapshot):
+    output = run(setup, snapshot, lambda q: q.pop("gemini_4_argon_weekly"))
+    lines = ag_lines(output)
+    assert lines["AG Argon"] == fmt_line("AG Argon", QUOTA_NA)
+    assert lines["AG Gemini"] == FRESH["AG Gemini"]
+    assert lines["AG Claude/GPT"] == FRESH["AG Claude/GPT"]
+    assert "Antigravity" not in output
+
+
+def test_missing_claude_gpt_weekly_blanks_that_window(setup, snapshot):
+    lines = ag_lines(run(setup, snapshot, lambda q: q.pop("claude_gpt_weekly")))
+    assert lines["AG Claude/GPT"] == row("AG Claude/GPT", (0.0012, "2026-10-19T07:26:06Z"), None)
+    assert lines["AG Gemini"] == FRESH["AG Gemini"]
+
+
+def test_current_live_shape_without_gemini_weekly_and_argon_keeps_other_rows(setup, snapshot):
+    def mutate(q):
+        for key in ("gemini_weekly", "gemini_4_argon_weekly", "gemini-4-argon-high"):
+            del q[key]
+
+    output = run(setup, snapshot, mutate)
+    lines = ag_lines(output)
+    assert lines["AG Gemini"] == row("AG Gemini", (18.02083, "2026-10-19T05:15:15Z"), None)
+    assert lines["AG Claude/GPT"] == FRESH["AG Claude/GPT"]
+    assert lines["AG Argon"] == fmt_line("AG Argon", QUOTA_NA)
+    assert "Antigravity" not in output
+
+
+def test_malformed_key_fails_only_that_row(setup, snapshot):
+    output = run(setup, snapshot, lambda q: q["claude_gpt_weekly"].update(remainingPercentage="x"))
+    lines = ag_lines(output)
+    assert lines["AG Claude/GPT"] == fmt_line("AG Claude/GPT", QUOTA_NA)
+    assert lines["AG Gemini"] == FRESH["AG Gemini"] and lines["AG Argon"] == FRESH["AG Argon"]
+
+
+def test_failed_row_uses_cached_row_with_stale_marker(setup, snapshot):
+    config, cache, _, _, _ = setup
+    o.omniroute_lines(config, cache, now=NOW)
+    output = run(setup, snapshot, lambda q: q.pop("gemini_4_argon_weekly"), now=NOW + 60)
+    marker = datetime.fromtimestamp(NOW).strftime("%Y-%m-%d %H:%M")
+    lines = ag_lines(output)
+    assert lines["AG Argon"] == FRESH["AG Argon"] + f" · stale (received {marker})"
+    assert fmt_line("AG Argon", QUOTA_NA) not in output
+    assert lines["AG Gemini"] == FRESH["AG Gemini"]
+    # Fresh rows refresh the cache; failed row keeps its old receipt.
+    again = run(setup, snapshot, lambda q: None, now=NOW + 120)
+    assert f"received {marker}" in ag_lines(again)["AG Argon"]
+
+
+def test_no_line_starts_with_antigravity(setup, snapshot):
+    config, cache, _, _, _ = setup
+    outputs = [
+        run(setup, snapshot, lambda q: q.pop("gemini_weekly")),
+        run(setup, snapshot, lambda q: q.clear(), now=NOW + 60),
+    ]
+    snapshot["providers"] = [p for p in snapshot["providers"] if p["provider"] != "agy"]
+    outputs.append(o.omniroute_lines(config, cache, now=NOW + 120))
+    for output in outputs:
+        assert not any(line.startswith("Antigravity") for line in output.splitlines())
+
+
+@pytest.mark.parametrize("failure", ["all_rows", "missing", "mismatch"])
+def test_all_ag_rows_failing_labels_error_line_ag(setup, snapshot, failure):
+    config, cache, _, _, _ = setup
+    item, _ = selected(snapshot, "agy")
+    if failure == "all_rows":
+        item["quotas"].clear()
+        error = QUOTA_NA
+    elif failure == "missing":
+        snapshot["providers"].remove(item)
+        error = "n/a (selected connection unavailable)"
+    else:
+        item["provider"] = "codex"
+        error = "n/a (selected connection unavailable)"
+    output = o.omniroute_lines(config, cache, now=NOW)
+    assert fmt_line("AG", error) in output.splitlines()
+    assert "Antigravity" not in output
+
+
+def test_all_ag_rows_failing_keeps_stale_rows_and_ag_error(setup, snapshot):
+    config, cache, _, _, _ = setup
+    o.omniroute_lines(config, cache, now=NOW)
+    output = run(setup, snapshot, lambda q: q.clear(), now=NOW + 60)
+    marker = datetime.fromtimestamp(NOW).strftime("%Y-%m-%d %H:%M")
+    lines = output.splitlines()
+    for _label, fresh in FRESH.items():
+        assert fresh + f" · stale (received {marker})" in lines
+    assert fmt_line("AG", QUOTA_NA) in lines
+
+
+def test_cache_hit_accepts_per_row_error_and_stale_lines_without_refetch(setup, snapshot):
+    config, cache, _, _, fetch = setup
+    o.omniroute_lines(config, cache, now=NOW)
+    first = run(setup, snapshot, lambda q: q.pop("gemini_4_argon_weekly"), now=NOW + 60)
+    assert fmt_line("AG Argon", QUOTA_NA) not in first  # stale row, from cache
+    cached = o.omniroute_lines(config, cache, now=NOW + 90)
+    assert cached == first and fetch.call_count == 2
+    # No prior cache for the row: per-row error line must also survive the hit.
+    cache.unlink()
+    second = run(setup, snapshot, lambda q: None, now=NOW + 200)
+    assert fmt_line("AG Argon", QUOTA_NA) in second.splitlines()
+    assert o.omniroute_lines(config, cache, now=NOW + 230) == second
+    assert fetch.call_count == 3
