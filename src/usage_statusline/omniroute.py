@@ -349,6 +349,9 @@ def omniroute_lines(
         try:
             snapshot = fetch_snapshot(key)
         except Exception as error:  # Sanitized to a static message.
+            reason = error.reason if isinstance(error, urllib.error.URLError) else error
+            if isinstance(reason, ConnectionRefusedError):
+                return None
             lines.append(_error_line(_fetch_error(error)))
     for selection in selections:
         ident = selection["connection_id"]

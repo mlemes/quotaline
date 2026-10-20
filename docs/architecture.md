@@ -6,7 +6,9 @@
 `~/.config/usage-statusline/omniroute.json` returns `None` and preserves the native path
 described below. An existing config selects only its mapped OmniRoute connections; output
 or failure returns immediately without native readers. This avoids assuming that a router
-account matches a native account. A malformed config is an error, not fallback.
+account matches a native account. A refused loopback connection also returns `None` and
+preserves native output; authentication, timeout, protocol and quota errors remain visible.
+A malformed config is an error, not fallback.
 
 `omniroute.py` owns config/key validation, a fixed authenticated loopback GET, exact
 connection/provider matching, quota conversion and its separate private cache. It uses only

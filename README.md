@@ -116,7 +116,9 @@ native Antigravity setup, then:
    `alias` appears after each label. Connection IDs select accounts; response order and the
    router's preferred account do not. No provider credentials are copied.
 
-When this file exists, the status line uses only OmniRoute, including on errors. It does not
+When this file exists and OmniRoute responds, the status line uses only OmniRoute, including
+on authentication or quota errors. If the loopback connection is refused, OmniRoute is treated
+as absent and native status lines resume. Other network failures remain visible. It does not
 read Claude stdin usage, Codex transcripts or the Antigravity keyring, and does not run native
 quota requests or credential recovery. Invalid config produces a visible configuration error.
 Remove or rename the file to restore native mode; native configuration and caches are kept.
