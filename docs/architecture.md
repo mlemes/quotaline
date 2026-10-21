@@ -11,9 +11,11 @@ account matches a native account. A malformed config is an error, not fallback.
 The optional boolean `native_ag_argon_fallback` defaults to false and is strictly validated.
 When explicitly enabled with exactly one selected `agy` connection, an unavailable Argon row
 without usable router-cached history can use only the Argon row from
-`antigravity.antigravity_line()`. `_native_argon_row()` catches native failures, filters out
+`antigravity.antigravity_line()`. `_native_row()` catches native failures, filters out
 unavailable rows, and preserves the body and native stale annotation under `AG Argon local`
-plus the selected alias. No native Gemini or Claude/GPT row is substituted. Native quota
+plus the selected alias. The optional boolean `native_ag_gemini_fallback` follows the same
+rules: when the router sends no `gemini_weekly`, a native `AG Gemini` row with a weekly
+percentage replaces the router row as `AG Gemini local`. No native Claude/GPT row is substituted. Native quota
 requests and credential recovery can run in this opt-in mode. Account identity cannot be
 matched across sources; operators must ensure local `agy` and the selected router account
 are the same. Multiple selected AG accounts disable this fallback. Local rows share the

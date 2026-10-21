@@ -130,6 +130,12 @@ labels it `AG Argon local` with the selected alias, and preserves its native sta
 It never copies native Gemini or Claude/GPT rows, and is disabled when multiple `agy`
 connections are selected. Native failures retain the router error or previous local stale row.
 
+If OmniRoute omits the Gemini weekly quota (`gemini_weekly`), you can add
+`"native_ag_gemini_fallback": true`. The same account and single-connection rules apply. When
+the router's Gemini row has no weekly value, the native `AG Gemini` row replaces it, labeled
+`AG Gemini local`, but only if that native row has a weekly percentage. Otherwise the router
+row stays. The default is `false`.
+
 quotaline makes one authenticated GET to
 `http://127.0.0.1:20128/api/usage/om-usage?format=json`, with a two-second timeout, no proxy
 and no redirects. HTTP 401 means check the usage key; HTTP 403 means enable usage permission.
