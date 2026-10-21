@@ -10,12 +10,15 @@ import sys
 
 def update(settings: dict, cmd: str, mode: str) -> str | None:
     """Change settings in place; return a message, or None when nothing changed."""
-    current = (settings.get("statusLine") or {}).get("command")
+    entry = settings.get("statusLine")
+    current = entry.get("command") if isinstance(entry, dict) else None
     if mode == "--uninstall":
         if current != cmd:
             return None
         del settings["statusLine"]
         return "Removed usage-statusline from"
+    if current == cmd:
+        return "Already installed in"
     settings["statusLine"] = {"type": "command", "command": cmd, "refreshInterval": 60}
     if current and current != cmd:
         return f"Replaced the statusLine command {current} in"
@@ -26,9 +29,15 @@ def main(argv: list[str]) -> int:
     path, cmd, mode = argv
     with open(path) as f:
         settings = json.load(f)
+    if not isinstance(settings, dict):
+        print(f"{path} does not hold a JSON object; nothing changed")
+        return 1
     msg = update(settings, cmd, mode)
     if msg is None:
         print("usage-statusline is not installed; nothing changed")
+        return 0
+    if msg == "Already installed in":
+        print(f"{msg} {path}")
         return 0
     with open(path, "w") as f:
         json.dump(settings, f, indent=2)

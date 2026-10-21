@@ -80,7 +80,7 @@ def parse_models(resp: dict) -> list[str]:
         quotas.setdefault((fraction, when), name)
     return [
         fmt_line(
-            "AG Gemini" if len(quotas) == 1 else f"AG {name}  ",
+            "AG Gemini" if len(quotas) == 1 else f"AG {name}",
             fmt_window("quota", 100 * (1 - fraction), reset),
         )
         for (fraction, reset), name in quotas.items()

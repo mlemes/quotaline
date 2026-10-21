@@ -138,6 +138,17 @@ def _ag_rows(quotas: dict, tag: str, label: str | None = None) -> list[str]:
     return rows
 
 
+AG_LABELS = ("AG Gemini", "AG Claude/GPT", "AG Argon")
+
+
+def _tag(selection: dict) -> str:
+    return f" [{selection['alias']}]" if selection.get("alias") else ""
+
+
+def _row_times(record: dict) -> list[float]:
+    return record.get("row_times", [record["received_at"]] * len(record["rows"]))
+
+
 def parse_connection(snapshot: dict, selection: dict, ag_label: str | None = None) -> list[str]:
     """Validated rows for the selected connection; ValueError carries only a static message."""
     if (
@@ -146,7 +157,7 @@ def parse_connection(snapshot: dict, selection: dict, ag_label: str | None = Non
         or snapshot.get("provider") != selection["provider"]
     ):
         raise ValueError(UNAVAILABLE)
-    tag = f" [{selection['alias']}]" if selection.get("alias") else ""
+    tag = _tag(selection)
     try:
         quotas = snapshot.get("quotas")
         if not isinstance(quotas, dict):
@@ -281,8 +292,7 @@ def _read_cache(cache: Path, scope: str, ids: set[str], now: float) -> tuple[flo
 
 def _stale(record: dict) -> list[str]:
     rows = []
-    times = record.get("row_times", [record["received_at"]] * len(record["rows"]))
-    for row, received in zip(record["rows"], times, strict=True):
+    for row, received in zip(record["rows"], _row_times(record), strict=True):
         marker = datetime.fromtimestamp(received).strftime("%Y-%m-%d %H:%M")
         rows.append(f"{row} · stale (received {marker})")
     return rows
@@ -323,6 +333,61 @@ def _native_argon_row(tag: str) -> str | None:
     except Exception:
         pass
     return None
+
+
+def _prior_row(record: dict | None, label: str, skip_errors: bool = False) -> int | None:
+    """Index of the cached row for label, or None."""
+    if record is None:
+        return None
+    prefix = fmt_line(label, "")
+    for i, row in enumerate(record["rows"]):
+        if row.startswith(prefix) and not (
+            skip_errors and ("n/a" in row or "no quota data" in row)
+        ):
+            return i
+    return None
+
+
+def _ag_connection(
+    match: dict, selection: dict, record: dict | None, native_argon: bool, now: float
+) -> tuple[list[str], list[str], list[float]]:
+    """(rendered lines, cached rows, row times) for one AG connection, one row per quota family.
+
+    A family that fails keeps its cached row, marked stale. AG Argon may instead come from the
+    native Antigravity source when native_argon is set. Raises ValueError when no family is fresh.
+    """
+    tag = _tag(selection)
+    rendered, rows, row_times = [], [], []
+    fresh = False
+    for label in AG_LABELS:
+        argon_fallback = native_argon and label == "AG Argon"
+        try:
+            row = parse_connection(match, selection, label)[0]
+        except ValueError:
+            previous = _prior_row(record, label + tag, skip_errors=argon_fallback)
+            if previous is None and argon_fallback:
+                local = _native_argon_row(tag) if match.get("provider") == "agy" else None
+                if local is not None:
+                    fresh = True
+                    rendered.append(local)
+                    rows.append(local)
+                    row_times.append(now)
+                    continue
+                previous = _prior_row(record, "AG Argon local" + tag)
+            if previous is None:
+                rendered.append(_error_line(QUOTA_ERROR, label + tag))
+                continue
+            row, received = record["rows"][previous], _row_times(record)[previous]
+            rendered.extend(_stale({"rows": [row], "received_at": received}))
+        else:
+            fresh = True
+            received = now
+            rendered.append(row)
+        rows.append(row)
+        row_times.append(received)
+    if not fresh:
+        parse_connection(match, selection)
+    return rendered, rows, row_times
 
 
 def omniroute_lines(
@@ -367,11 +432,11 @@ def omniroute_lines(
                     )
                 }
                 for selection in selections:
-                    tag = f" [{selection['alias']}]" if selection.get("alias") else ""
+                    tag = _tag(selection)
                     for message in (UNAVAILABLE, QUOTA_ERROR):
                         allowed.add(_error_line(message, PROVIDERS[selection["provider"]] + tag))
                     if selection["provider"] == "agy":
-                        for label in ("AG Gemini", "AG Claude/GPT", "AG Argon"):
+                        for label in AG_LABELS:
                             allowed.add(_error_line(QUOTA_ERROR, label + tag))
                     record = prior.get(selection["connection_id"])
                     if record:
@@ -410,73 +475,9 @@ def omniroute_lines(
             if len(matches) != 1:
                 raise ValueError(UNAVAILABLE)
             if selection["provider"] == "agy":
-                tag = f" [{selection['alias']}]" if selection.get("alias") else ""
-                rows, row_times, rendered = [], [], []
-                fresh = False
-                for label in ("AG Gemini", "AG Claude/GPT", "AG Argon"):
-                    try:
-                        row = parse_connection(matches[0], selection, label)[0]
-                    except ValueError:
-                        prefix = fmt_line(label + tag, "")
-                        previous = (
-                            next(
-                                (
-                                    i
-                                    for i, r in enumerate(record["rows"])
-                                    if r.startswith(prefix)
-                                    and not (
-                                        native_argon
-                                        and label == "AG Argon"
-                                        and ("n/a" in r or "no quota data" in r)
-                                    )
-                                ),
-                                None,
-                            )
-                            if record
-                            else None
-                        )
-                        if record is None or previous is None:
-                            local = (
-                                _native_argon_row(tag)
-                                if native_argon
-                                and label == "AG Argon"
-                                and matches[0].get("provider") == "agy"
-                                else None
-                            )
-                            if local is not None:
-                                row, received, fresh = local, now, True
-                                rendered.append(row)
-                            else:
-                                local_prefix = fmt_line("AG Argon local" + tag, "")
-                                previous = (
-                                    next(
-                                        (
-                                            i
-                                            for i, r in enumerate(record["rows"])
-                                            if r.startswith(local_prefix)
-                                        ),
-                                        None,
-                                    )
-                                    if record and native_argon and label == "AG Argon"
-                                    else None
-                                )
-                                if record is None or previous is None:
-                                    rendered.append(_error_line(QUOTA_ERROR, label + tag))
-                                    continue
-                        if record is not None and previous is not None:
-                            row = record["rows"][previous]
-                            received = record.get(
-                                "row_times", [record["received_at"]] * len(record["rows"])
-                            )[previous]
-                            rendered.extend(_stale({"rows": [row], "received_at": received}))
-                    else:
-                        fresh = True
-                        received = now
-                        rendered.append(row)
-                    rows.append(row)
-                    row_times.append(received)
-                if not fresh:
-                    parse_connection(matches[0], selection)
+                rendered, rows, row_times = _ag_connection(
+                    matches[0], selection, record, native_argon, now
+                )
                 lines.extend(rendered)
                 connections[ident] = {"rows": rows, "received_at": now, "row_times": row_times}
                 continue
@@ -484,7 +485,7 @@ def omniroute_lines(
         except ValueError as error:
             message = str(error) if str(error) == UNAVAILABLE else QUOTA_ERROR
             lines.extend(_stale(record) if record else [])
-            tag = f" [{selection['alias']}]" if selection.get("alias") else ""
+            tag = _tag(selection)
             lines.append(_error_line(message, PROVIDERS[selection["provider"]] + tag))
         else:
             lines.extend(rows)

@@ -115,3 +115,9 @@ def test_entry_without_token(home: Path) -> None:
 )
 def test_extract_token_formats(raw: str) -> None:
     assert ag.extract_token(raw) == "ya29.abc"
+
+
+@pytest.mark.parametrize("value", ["x", "0", "-1"])
+def test_bad_entry_number_is_rejected_without_traceback(value, capsys) -> None:
+    assert setup.main(["--agy-entry", value], fake_run(ITEMS), always) == 1
+    assert "--agy-entry must be" in capsys.readouterr().out

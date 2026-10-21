@@ -62,8 +62,11 @@ def main(argv: list[str], run: Run = sh, which: Callable = shutil.which) -> int:
             print(f"Antigravity: skipped, {tool} not found. Run: sudo apt install {pkg}")
             return 1
     found = candidates(list_entries(run))
-    pick = int(argv[argv.index("--agy-entry") + 1]) if "--agy-entry" in argv else None
-    if pick is None and len(found) != 1:
+    pick = None
+    if "--agy-entry" in argv:
+        value = argv[argv.index("--agy-entry") + 1]
+        pick = int(value) if value.isdigit() else 0
+    if not found or (pick is None and len(found) != 1):
         print(f"Antigravity: found {len(found)} matching keyring entries.")
         for n, (label, attrs) in enumerate(found, 1):
             print(f"  {n}. {label}  {attrs}")

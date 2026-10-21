@@ -21,7 +21,8 @@ def fmt_window(label: str, used_pct: float, resets_at: datetime | None) -> str:
 
 
 def fmt_line(label: str, body: str) -> str:
-    return f"{label:<{LABEL_WIDTH}}{body}"
+    """Label padded to LABEL_WIDTH; a longer label still keeps two spaces before the body."""
+    return f"{label + '  ':<{LABEL_WIDTH}}{body}"
 
 
 def fmt_windows(
