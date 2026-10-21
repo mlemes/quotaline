@@ -41,13 +41,17 @@ Field-level formats are in `docs/DATA.md`; components and decisions are in
    Argon has weekly only. Past resets retain historical usage.
    The strictly boolean config option `native_ag_argon_fallback` defaults to false. If enabled
    with exactly one selected `agy` connection, an unavailable Argon row without usable
-   router-cached history calls `_native_argon_row(tag)`, which reads `antigravity_line()`.
+   router-cached history calls `_native_row("AG Argon", tag)`, which reads `antigravity_line()`.
    This crosses into native credential/quota handling and can trigger credential recovery.
    Only a usable `AG Argon` row is copied: its body and native stale marker remain, with label
    `AG Argon local` and the selected alias. Native failures leave the router error or retain
    previous local history. Account identities cannot be matched; explicit opt-in is safe only
    when local `agy` and the selected OmniRoute AG account are the same. Multiple selected
-   `agy` connections disable the fallback; native Gemini and Claude/GPT rows are ignored.
+   `agy` connections disable the fallback; native Claude/GPT rows are ignored.
+   The strictly boolean option `native_ag_gemini_fallback` defaults to false. If enabled under
+   the same single-connection rule, a fresh router Gemini row whose snapshot has no
+   `gemini_weekly` calls `_native_row("AG Gemini", tag, weekly=True)`. A native row with a
+   weekly percentage replaces it as `AG Gemini local`; otherwise the router row stays.
 7. A successful selected connection replaces its cached complete result and local receipt.
    Missing/invalid connections retain only their own previous complete result with
    `stale (received YYYY-MM-DD HH:MM)` and current error. Global HTTP/parse failures may retain
