@@ -159,7 +159,7 @@ flowchart LR
 - `claude.claude_line(data: dict) -> str`: never raises on missing fields.
 - `claude.LABEL_WIDTH = 15`: every line pads its label to this width.
 - `claude.fmt_window(label: str, used_pct: float, resets_at: datetime) -> str`: `"week  41% · resets Thu 09:00"` in local time, percent right-aligned to 3 digits.
-- `claude.fmt_line(label: str, body: str) -> str`: pads the label to `LABEL_WIDTH`.
+- `claude.fmt_line(label: str, body: str) -> str`: pads the label to `LABEL_WIDTH`. A longer label, such as `AG Argon local [alias]`, keeps two spaces before the body.
 - `claude.fmt_windows(session, week, labels=("session", "week")) -> str`: each window is `(used_pct, datetime | None) | None`. Joins with ` | `. A missing window prints `--` padded to full width. A `None` reset time prints `--` padded to the width of a real one (`claude.fmt_reset`).
 - `codex.latest_rate_limits(sessions: Path = SESSIONS) -> dict | None`: the `rate_limits` of the newest `token_count` event with `limit_id` `codex` or missing, each window given an epoch `resets_at` (converted from `resets_in_seconds` if needed). Never reads more than 256 KiB per file.
 - `codex.codex_line(sessions: Path = SESSIONS, now: float | None = None) -> str | None`: `None` when `sessions` isn't a directory, `Codex          no usage yet` when no event is found, otherwise one aligned line. Never raises; errors print `n/a (<ExceptionName>)`. `SESSIONS` is `$CODEX_HOME/sessions`, default `~/.codex/sessions`.
@@ -170,7 +170,7 @@ flowchart LR
 - `antigravity.extract_token(raw: str) -> str`: accepts a plain token, oauth2 JSON (`access_token`), agy's wrapper (`{"token": {oauth2}}`), or `go-keyring-base64:`. Raises `ValueError` on bad JSON or base64.
 - `agy_setup.main(argv, run=sh, which=shutil.which) -> int`: returns 0 when it saves the config, 1 otherwise. `run` takes an argv list and returns stdout, which tests replace with a fake keyring.
 - `settings_entry.update(settings, cmd, mode) -> str | None`: changes the dict in place; `mode` is `install` or `--uninstall`; returns `None` when uninstall finds another command. CLI: `python3 -m usage_statusline.settings_entry PATH CMD MODE`.
-- `install.sh [--uninstall] [--no-agy] [--agy-entry N] [--dest DIR [--sync]]`: the `CLAUDE_SETTINGS` env var overrides the settings path. Tests always pass `--no-agy`. `--dest DIR` swaps a fresh copy into `DIR/src` and points `statusLine` there. `--uninstall --dest DIR` also deletes `DIR/src`. `--sync` refreshes `DIR/src` only if it exists and never touches settings.
+- `install.sh [--uninstall] [--no-agy] [--agy-entry N] [--dest DIR [--sync]]`: the `CLAUDE_SETTINGS` env var overrides the settings path. Tests always pass `--no-agy`. `--dest DIR` swaps a fresh copy into `DIR/src` and points `statusLine` there. `--uninstall --dest DIR` also deletes `DIR/src`. `--sync` refreshes `DIR/src` only if it exists and never touches settings. Reinstalling with the same command leaves the existing `statusLine` entry, including user options such as `refreshInterval`, unchanged. A non-object `statusLine` value is replaced on install and ignored on uninstall.
 - Plugin: `/quotaline:install [--no-agy] [--agy-entry N]` and `/quotaline:uninstall`, both `disable-model-invocation: true`.
 
 ## Key decisions

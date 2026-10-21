@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from usage_statusline.claude import claude_line
+from usage_statusline.claude import claude_line, fmt_line
 
 RESET = 1738425600
 RESET_TEXT = datetime.fromtimestamp(RESET).astimezone().strftime("%a %H:%M")
@@ -43,3 +43,8 @@ def test_claude_and_antigravity_lines_align() -> None:
     ag = format_lines([("AG Claude/GPT", (0, when), (7, when))])
     for mark in ("session", "·", "|", "week"):
         assert claude.index(mark) == ag.index(mark), mark
+
+
+def test_fmt_line_keeps_a_gap_after_long_labels():
+    assert fmt_line("AG Argon local [work]", "body") == "AG Argon local [work]  body"
+    assert fmt_line("Claude", "body") == "Claude".ljust(15) + "body"
