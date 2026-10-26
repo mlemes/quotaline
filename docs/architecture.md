@@ -9,7 +9,9 @@ or failure returns immediately without native readers by default. This avoids as
 account matches a native account. A malformed config is an error, not fallback. The one exception
 is a failed router fetch (`n/a (fetch failed)`, for example OmniRoute is not running): `main.py`
 hides every OmniRoute line, stale rows included, and prints only the native Claude, Antigravity
-and Codex rows. Those rows are not tied to the mapped router accounts.
+and Codex rows. `main.py` also filters every row through `UNUSABLE` markers (`n/a (`, `stale (`,
+`no usage yet`, `usage appears after`), so a provider that is missing, logged out or stale leaves
+no line, and the output is empty when no source has live data. Those rows are not tied to the mapped router accounts.
 
 The optional boolean `native_ag_argon_fallback` defaults to false and is strictly validated.
 When explicitly enabled with exactly one selected `agy` connection, an unavailable Argon row

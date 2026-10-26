@@ -12,6 +12,9 @@ Field-level formats are in `docs/DATA.md`; components and decisions are in
    unexpected adapter errors both return without touching native providers or stdin. One
    exception: when the router output's error line is `n/a (fetch failed)`, `main.main` prints no
    OmniRoute lines and runs the native path (stdin JSON, `antigravity_line`, `codex_line`) instead.
+   The same fallback applies when router output has no live row or the adapter raises. Every
+   output line, router or native, passes `main._usable`, which drops lines containing `n/a (`,
+   `stale (`, `no usage yet` or `usage appears after`.
 2. **Trust boundary, user config to selection.** `omniroute_lines` validates JSON object fields
    `key_file` and nonempty `connections[]`: exact supported `provider`, opaque `connection_id`
    and optional printable `alias`. Duplicate IDs/unknown fields/control characters fail.

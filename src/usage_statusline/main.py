@@ -2,38 +2,47 @@ import json
 import sys
 
 from usage_statusline.antigravity import antigravity_line
-from usage_statusline.claude import claude_line, fmt_line
+from usage_statusline.claude import claude_line
 from usage_statusline.codex import codex_line
-from usage_statusline.omniroute import FETCH_FAILED, omniroute_lines
+from usage_statusline.omniroute import omniroute_lines
+
+# Rows without live data: errors, stale cache, or a provider that is absent or not yet used.
+UNUSABLE = ("n/a (", "stale (", "no usage yet", "usage appears after")
 
 
-def main() -> None:
-    """Read the status line JSON on stdin and print one line per provider."""
+def _usable(text: str | None) -> list[str]:
+    """Lines of text that carry live quota data."""
+    return [line for line in (text or "").splitlines() if not any(m in line for m in UNUSABLE)]
+
+
+def _routed() -> list[str]:
+    """OmniRoute rows, or [] when it is not configured or yields no live quota row."""
     try:
-        routed = omniroute_lines()
-    except Exception:  # Router mode never falls back to native sources.
-        print(fmt_line("OmniRoute", "n/a (fetch failed)"))
-        return
-    if routed is not None:
-        head = routed.splitlines()[:2]
-        if not any(line.endswith(f"n/a ({FETCH_FAILED})") for line in head[1:]):
-            print(routed)
-            return
-        # Router down: show only native rows, no OmniRoute lines.
+        lines = _usable(omniroute_lines())
+    except Exception:  # A router failure falls back to native sources.
+        return []
+    return lines if len(lines) > 1 else []  # The header alone is not data.
+
+
+def _native() -> list[str]:
+    """Native rows of every provider that is installed and has live data."""
     try:
         data = json.load(sys.stdin)
     except ValueError:
         data = {}
     if not isinstance(data, dict):
         data = {}
-    try:
-        print(claude_line(data))
-    except Exception as error:  # Malformed Claude input must not suppress other providers.
-        print(fmt_line("Claude", f"n/a ({type(error).__name__})"))
-    try:
-        print(antigravity_line())
-    except Exception as error:  # A provider failure must not suppress the other providers.
-        print(fmt_line("Antigravity", f"n/a ({type(error).__name__})"))
-    codex = codex_line()
-    if codex is not None:
-        print(codex)
+    lines: list[str] = []
+    for source in (lambda: claude_line(data), antigravity_line, codex_line):
+        try:
+            lines.extend(_usable(source()))
+        except Exception:  # A provider failure must not suppress the other providers.
+            continue
+    return lines
+
+
+def main() -> None:
+    """Print one line per provider that is installed and has live quota data."""
+    lines = _routed() or _native()
+    if lines:
+        print("\n".join(lines))

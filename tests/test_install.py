@@ -59,11 +59,11 @@ def test_dest_copies_code_and_runs_from_there(tmp_path: Path) -> None:
     cmd = json.loads(settings.read_text())["statusLine"]["command"]
     # temp HOME and a no-op token command: never the real keyring, cache, or network
     env = {**os.environ, "HOME": str(tmp_path), "USAGE_STATUSLINE_AGY_TOKEN_CMD": "true"}
-    out = subprocess.run(
+    result = subprocess.run(
         ["bash", "-c", cmd], input="{}", env=env, capture_output=True, text=True, check=True
-    ).stdout
-    assert out.startswith("Claude ")  # the quoted path with a space still works
-    assert "n/a (no token" in out
+    )
+    # The quoted path with a space still works: it ran clean and, with no live data, prints nothing.
+    assert result.stderr == "" and result.stdout == ""
     run(settings, "--dest", str(dest), "--uninstall")
     assert "statusLine" not in json.loads(settings.read_text())
     assert not (dest / "src").exists()
