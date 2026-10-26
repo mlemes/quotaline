@@ -15,10 +15,12 @@ def main() -> None:
         print(fmt_line("OmniRoute", "n/a (fetch failed)"))
         return
     if routed is not None:
-        print(routed)
-        if not any(line.endswith(f"n/a ({FETCH_FAILED})") for line in routed.splitlines()[1:2]):
+        head = routed.splitlines()[:2]
+        if not any(line.endswith(f"n/a ({FETCH_FAILED})") for line in head[1:]):
+            print(routed)
             return
-        # Router down: show local sources below the stale rows, labeled as unmapped.
+        # Router down: drop its stale rows so native rows are not duplicated.
+        print("\n".join(head))
         print(fmt_line("Native", "OmniRoute unavailable; unmapped local sources"))
     try:
         data = json.load(sys.stdin)

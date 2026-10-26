@@ -114,7 +114,8 @@ def test_router_fetch_failure_appends_native_rows(monkeypatch, capsys):
     monkeypatch.setattr("sys.stdin", io.StringIO("{}"))
     m.main()
     lines = capsys.readouterr().out.splitlines()
-    assert lines[:3] == router.splitlines()
-    assert lines[3] == fmt_line("Native", "OmniRoute unavailable; unmapped local sources")
-    assert lines[4].startswith("Claude")
-    assert lines[5:] == ["Antigravity  x", "Codex  y"]
+    assert lines[:2] == router.splitlines()[:2]
+    assert "stale row" not in lines
+    assert lines[2] == fmt_line("Native", "OmniRoute unavailable; unmapped local sources")
+    assert lines[3].startswith("Claude")
+    assert lines[4:] == ["Antigravity  x", "Codex  y"]
