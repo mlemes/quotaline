@@ -1055,3 +1055,74 @@ def test_cache_hit_accepts_per_row_error_and_stale_lines_without_refetch(setup, 
     assert fmt_line("AG Argon", QUOTA_NA) in second.splitlines()
     assert o.omniroute_lines(config, cache, now=NOW + 230) == second
     assert fetch.call_count == 3
+
+
+NATIVE_GEMINI = fmt_line(
+    "AG Gemini", "session   9% · resets Wed 01:08 | week  16% · resets Fri 23:56"
+)
+
+
+def gemini_fallback(setup, snapshot, monkeypatch, native_output, weekly=False):
+    config, cache, data, _, _ = setup
+    data["native_ag_gemini_fallback"] = True
+    config.write_text(json.dumps(data))
+    item, _ = selected(snapshot, "agy")
+    if not weekly:
+        del item["quotas"]["gemini_weekly"]
+    native = Mock(return_value=native_output)
+    monkeypatch.setattr(o, "antigravity_line", native, raising=False)
+    return native, ag_lines(o.omniroute_lines(config, cache, now=NOW))
+
+
+def test_native_gemini_row_replaces_router_row_without_weekly(setup, snapshot, monkeypatch):
+    native, lines = gemini_fallback(
+        setup, snapshot, monkeypatch, "\n".join([NATIVE_GEMINI, FRESH["AG Argon"]])
+    )
+
+    native.assert_called_once_with()
+    assert lines["AG Gemini local"] == fmt_line("AG Gemini local", NATIVE_GEMINI[15:])
+    assert "AG Gemini" not in lines
+    assert lines["AG Claude/GPT"] == FRESH["AG Claude/GPT"]
+
+
+def test_router_gemini_weekly_skips_native_call(setup, snapshot, monkeypatch):
+    native, lines = gemini_fallback(setup, snapshot, monkeypatch, NATIVE_GEMINI, weekly=True)
+
+    native.assert_not_called()
+    assert lines["AG Gemini"] == FRESH["AG Gemini"]
+    assert "AG Gemini local" not in lines
+
+
+@pytest.mark.parametrize(
+    "native_output",
+    ["", fmt_line("AG Gemini", "session   9% · resets Wed 01:08 | week   --"), "Antigravity  n/a"],
+)
+def test_native_gemini_without_weekly_keeps_router_row(setup, snapshot, monkeypatch, native_output):
+    _, lines = gemini_fallback(setup, snapshot, monkeypatch, native_output)
+
+    assert lines["AG Gemini"].startswith(fmt_line("AG Gemini", "session"))
+    assert lines["AG Gemini"].endswith("week   --")
+    assert "AG Gemini local" not in lines
+
+
+def test_native_gemini_fallback_is_off_by_default(setup, snapshot, monkeypatch):
+    config, cache, _, _, _ = setup
+    item, _ = selected(snapshot, "agy")
+    del item["quotas"]["gemini_weekly"]
+    native = Mock(return_value=NATIVE_GEMINI)
+    monkeypatch.setattr(o, "antigravity_line", native, raising=False)
+
+    lines = ag_lines(o.omniroute_lines(config, cache, now=NOW))
+
+    native.assert_not_called()
+    assert "AG Gemini local" not in lines
+
+
+@pytest.mark.parametrize("value", [None, 1, "true"])
+def test_native_ag_gemini_fallback_config_requires_boolean(setup, value):
+    config, cache, data, _, fetch = setup
+    data["native_ag_gemini_fallback"] = value
+    config.write_text(json.dumps(data))
+
+    assert o.omniroute_lines(config, cache, now=NOW) == HEADER + "\n" + CONFIG_ERROR
+    fetch.assert_not_called()

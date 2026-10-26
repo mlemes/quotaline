@@ -139,6 +139,11 @@ def _ag_rows(quotas: dict, tag: str, label: str | None = None) -> list[str]:
 
 
 AG_LABELS = ("AG Gemini", "AG Claude/GPT", "AG Argon")
+# Opt-in config options that fill an AG row from the native Antigravity source.
+NATIVE_FALLBACKS = {
+    "AG Gemini": "native_ag_gemini_fallback",
+    "AG Argon": "native_ag_argon_fallback",
+}
 
 
 def _tag(selection: dict) -> str:
@@ -211,8 +216,8 @@ def _load_config(text: str) -> tuple[dict, list[dict]]:
     if (
         not isinstance(data, dict)
         or not {"key_file", "connections"} <= set(data)
-        or set(data) - {"key_file", "connections", "native_ag_argon_fallback"}
-        or type(data.get("native_ag_argon_fallback", False)) is not bool
+        or set(data) - {"key_file", "connections", *NATIVE_FALLBACKS.values()}
+        or any(type(data.get(o, False)) is not bool for o in NATIVE_FALLBACKS.values())
     ):
         raise ValueError
     key_file, connections = data["key_file"], data["connections"]
@@ -321,15 +326,20 @@ def _error_line(message: str, label: str = "OmniRoute") -> str:
     return fmt_line(label, f"n/a ({message})")
 
 
-def _native_argon_row(tag: str) -> str | None:
-    """Keep native provenance and body; never substitute another native quota family."""
-    prefix = fmt_line("AG Argon", "")
+def _native_row(label: str, tag: str, weekly: bool = False) -> str | None:
+    """Keep native provenance and body; never substitute another native quota family.
+
+    With weekly set, accept only a row whose week column holds a percentage.
+    """
+    prefix = fmt_line(label, "")
     try:
         for row in antigravity_line().splitlines():
             if row.startswith(prefix):
                 body = row[len(prefix) :]
+                if weekly and (" | " not in body or "%" not in body.rsplit(" | ", 1)[1]):
+                    continue
                 if row.isprintable() and "%" in body and "n/a" not in body:
-                    return fmt_line("AG Argon local" + tag, body)
+                    return fmt_line(f"{label} local{tag}", body)
     except Exception:
         pass
     return None
@@ -349,24 +359,25 @@ def _prior_row(record: dict | None, label: str, skip_errors: bool = False) -> in
 
 
 def _ag_connection(
-    match: dict, selection: dict, record: dict | None, native_argon: bool, now: float
+    match: dict, selection: dict, record: dict | None, native: set[str], now: float
 ) -> tuple[list[str], list[str], list[float]]:
     """(rendered lines, cached rows, row times) for one AG connection, one row per quota family.
 
     A family that fails keeps its cached row, marked stale. AG Argon may instead come from the
-    native Antigravity source when native_argon is set. Raises ValueError when no family is fresh.
+    native Antigravity source when it is in native, and AG Gemini may when the router omits
+    gemini_weekly. Raises ValueError when no family is fresh.
     """
     tag = _tag(selection)
     rendered, rows, row_times = [], [], []
     fresh = False
     for label in AG_LABELS:
-        argon_fallback = native_argon and label == "AG Argon"
+        argon_fallback = label == "AG Argon" and label in native
         try:
             row = parse_connection(match, selection, label)[0]
         except ValueError:
             previous = _prior_row(record, label + tag, skip_errors=argon_fallback)
             if previous is None and argon_fallback:
-                local = _native_argon_row(tag) if match.get("provider") == "agy" else None
+                local = _native_row(label, tag) if match.get("provider") == "agy" else None
                 if local is not None:
                     fresh = True
                     rendered.append(local)
@@ -382,6 +393,8 @@ def _ag_connection(
         else:
             fresh = True
             received = now
+            if label == "AG Gemini" and label in native and "gemini_weekly" not in match["quotas"]:
+                row = _native_row(label, tag, weekly=True) or row
             rendered.append(row)
         rows.append(row)
         row_times.append(received)
@@ -409,10 +422,11 @@ def omniroute_lines(
         return header + "\n" + _error_line(CONFIG_ERROR)
 
     now = time.time() if now is None else now
-    native_argon = (
-        data.get("native_ag_argon_fallback", False)
-        and sum(selection["provider"] == "agy" for selection in selections) == 1
-    )
+    native = set()
+    if sum(selection["provider"] == "agy" for selection in selections) == 1:
+        for label, option in NATIVE_FALLBACKS.items():
+            if data.get(option, False):
+                native.add(label)
     scope = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
     ids = {s["connection_id"] for s in selections}
     records: dict = {}
@@ -476,7 +490,7 @@ def omniroute_lines(
                 raise ValueError(UNAVAILABLE)
             if selection["provider"] == "agy":
                 rendered, rows, row_times = _ag_connection(
-                    matches[0], selection, record, native_argon, now
+                    matches[0], selection, record, native, now
                 )
                 lines.extend(rendered)
                 connections[ident] = {"rows": rows, "received_at": now, "row_times": row_times}

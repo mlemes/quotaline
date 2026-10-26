@@ -121,6 +121,14 @@ read Claude stdin usage, Codex transcripts or the Antigravity keyring, and does 
 quota requests or credential recovery. Invalid config produces a visible configuration error.
 Remove or rename the file to restore native mode; native configuration and caches are kept.
 
+If the OmniRoute fetch fails (for example the service is not running), or no OmniRoute row has
+live data, quotaline hides all OmniRoute lines, including stale rows, and shows only the native
+Claude, Antigravity and Codex rows. Those rows are not tied to the mapped OmniRoute accounts.
+
+quotaline shows a line only when its source is installed and has live quota data. It hides
+`n/a (…)` errors, `stale (…)` rows, `no usage yet` and `usage appears after the first reply`,
+so a missing or logged-out provider leaves no line. When nothing is usable, it prints nothing.
+
 If OmniRoute omits Argon, you can explicitly add `"native_ag_argon_fallback": true` to this
 config. Use this only when local `agy` and the single selected OmniRoute `agy` connection
 use the same account: quotaline cannot match their account identities. The default is `false`.
@@ -129,6 +137,12 @@ recovery. It substitutes only a missing Argon row without a usable router-cached
 labels it `AG Argon local` with the selected alias, and preserves its native stale annotation.
 It never copies native Gemini or Claude/GPT rows, and is disabled when multiple `agy`
 connections are selected. Native failures retain the router error or previous local stale row.
+
+If OmniRoute omits the Gemini weekly quota (`gemini_weekly`), you can add
+`"native_ag_gemini_fallback": true`. The same account and single-connection rules apply. When
+the router's Gemini row has no weekly value, the native `AG Gemini` row replaces it, labeled
+`AG Gemini local`, but only if that native row has a weekly percentage. Otherwise the router
+row stays. The default is `false`.
 
 quotaline makes one authenticated GET to
 `http://127.0.0.1:20128/api/usage/om-usage?format=json`, with a two-second timeout, no proxy
