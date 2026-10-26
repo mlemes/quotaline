@@ -8,8 +8,8 @@ described below. An existing config selects only its mapped OmniRoute connection
 or failure returns immediately without native readers by default. This avoids assuming that a router
 account matches a native account. A malformed config is an error, not fallback. The one exception
 is a failed router fetch (`n/a (fetch failed)`, for example OmniRoute is not running): `main.py`
-then prints a `Native` notice line followed by the native Claude, Antigravity and Codex rows,
-labeled as unmapped local sources, in place of the stale router rows (only the header and the fetch error remain).
+hides every OmniRoute line, stale rows included, and prints only the native Claude, Antigravity
+and Codex rows. Those rows are not tied to the mapped router accounts.
 
 The optional boolean `native_ag_argon_fallback` defaults to false and is strictly validated.
 When explicitly enabled with exactly one selected `agy` connection, an unavailable Argon row

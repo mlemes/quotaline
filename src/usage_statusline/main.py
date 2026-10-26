@@ -19,9 +19,7 @@ def main() -> None:
         if not any(line.endswith(f"n/a ({FETCH_FAILED})") for line in head[1:]):
             print(routed)
             return
-        # Router down: drop its stale rows so native rows are not duplicated.
-        print("\n".join(head))
-        print(fmt_line("Native", "OmniRoute unavailable; unmapped local sources"))
+        # Router down: show only native rows, no OmniRoute lines.
     try:
         data = json.load(sys.stdin)
     except ValueError:
