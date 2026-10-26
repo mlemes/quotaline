@@ -121,6 +121,11 @@ read Claude stdin usage, Codex transcripts or the Antigravity keyring, and does 
 quota requests or credential recovery. Invalid config produces a visible configuration error.
 Remove or rename the file to restore native mode; native configuration and caches are kept.
 
+If the OmniRoute fetch fails (for example the service is not running), quotaline keeps the
+stale router rows and adds a `Native  OmniRoute unavailable; unmapped local sources` line,
+followed by the native Claude, Antigravity and Codex rows. Those rows are not tied to the
+mapped OmniRoute accounts.
+
 If OmniRoute omits Argon, you can explicitly add `"native_ag_argon_fallback": true` to this
 config. Use this only when local `agy` and the single selected OmniRoute `agy` connection
 use the same account: quotaline cannot match their account identities. The default is `false`.

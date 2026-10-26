@@ -4,7 +4,7 @@ import sys
 from usage_statusline.antigravity import antigravity_line
 from usage_statusline.claude import claude_line, fmt_line
 from usage_statusline.codex import codex_line
-from usage_statusline.omniroute import omniroute_lines
+from usage_statusline.omniroute import FETCH_FAILED, omniroute_lines
 
 
 def main() -> None:
@@ -16,7 +16,10 @@ def main() -> None:
         return
     if routed is not None:
         print(routed)
-        return
+        if not any(line.endswith(f"n/a ({FETCH_FAILED})") for line in routed.splitlines()[1:2]):
+            return
+        # Router down: show local sources below the stale rows, labeled as unmapped.
+        print(fmt_line("Native", "OmniRoute unavailable; unmapped local sources"))
     try:
         data = json.load(sys.stdin)
     except ValueError:

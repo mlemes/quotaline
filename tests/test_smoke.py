@@ -100,3 +100,21 @@ def test_router_mode_never_reads_stdin_or_calls_native(monkeypatch, capsys, unex
     m.main()
     expected = fmt_line("OmniRoute", "n/a (fetch failed)") if unexpected_error else router()
     assert capsys.readouterr().out == expected + "\n"
+
+
+def test_router_fetch_failure_appends_native_rows(monkeypatch, capsys):
+    router = (
+        "OmniRoute      upstream age unknown\n"
+        "OmniRoute      n/a (fetch failed)\n"
+        "Codex          stale row"
+    )
+    monkeypatch.setattr(m, "omniroute_lines", lambda: router)
+    monkeypatch.setattr(m, "antigravity_line", lambda: "Antigravity  x")
+    monkeypatch.setattr(m, "codex_line", lambda: "Codex  y")
+    monkeypatch.setattr("sys.stdin", io.StringIO("{}"))
+    m.main()
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[:3] == router.splitlines()
+    assert lines[3] == fmt_line("Native", "OmniRoute unavailable; unmapped local sources")
+    assert lines[4].startswith("Claude")
+    assert lines[5:] == ["Antigravity  x", "Codex  y"]

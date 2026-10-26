@@ -6,7 +6,10 @@
 `~/.config/usage-statusline/omniroute.json` returns `None` and preserves the native path
 described below. An existing config selects only its mapped OmniRoute connections; output
 or failure returns immediately without native readers by default. This avoids assuming that a router
-account matches a native account. A malformed config is an error, not fallback.
+account matches a native account. A malformed config is an error, not fallback. The one exception
+is a failed router fetch (`n/a (fetch failed)`, for example OmniRoute is not running): `main.py`
+then prints a `Native` notice line followed by the native Claude, Antigravity and Codex rows,
+labeled as unmapped local sources, below the stale router rows.
 
 The optional boolean `native_ag_argon_fallback` defaults to false and is strictly validated.
 When explicitly enabled with exactly one selected `agy` connection, an unavailable Argon row
