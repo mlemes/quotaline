@@ -66,8 +66,10 @@ quotaline works on its own as well. It doesn't need either plugin, and it doesn'
    the Antigravity line. Pass `--no-agy` or `--agy-entry N` as with `install.sh`.
 3. Restart Claude Code. The Claude line fills in after the first reply.
 
-A plugin can't set your status line by itself, so step 2 is required. After a plugin update,
-the plugin refreshes its copy of the code at the next session start. To remove the status line,
+A plugin can't set your status line by itself, so step 2 is required. After each plugin update,
+run `/quotaline:install --sync` to refresh the installed code copy. This changes no settings
+and skips keyring setup; it does nothing if the status line isn't installed. The plugin ships
+no hooks, so synchronization is manual. To remove the status line,
 run `/quotaline:uninstall`, then `claude plugin uninstall quotaline@mlemes`.
 
 ## Install from a clone
@@ -208,8 +210,8 @@ Antigravity setup unless you pass `--no-agy`.
 - **Runs:** `install.sh`, only when you run `/quotaline:install` or `/quotaline:uninstall`.
   `install.sh` runs two bundled Python modules, `usage_statusline.settings_entry` (edits
   `statusLine`) and `usage_statusline.agy_setup` (finds the keyring entry). A
-  SessionStart hook runs `install.sh --sync`, which copies the plugin's Python code into its data
-  directory, and only if you already installed. The status line runs
+  Manual `/quotaline:install --sync` runs `install.sh --sync`, which copies the plugin's Python
+  code into its data directory, and only if you already installed. The status line runs
   `python3 -m usage_statusline` from that copy. Nothing is downloaded or installed from a
   package registry. On HTTP 401, it also runs bounded `agy models` as described above.
 - **Reads:** the status line JSON that Claude Code sends (for `rate_limits`). During setup, the
@@ -284,12 +286,13 @@ refresh. This delegates credential handling to `agy`; quotaline does not impleme
 write the keyring. API responses are parsed with `json.load` into percentages and times;
 nothing from them is run or written as code.
 
-### The SessionStart hook passes `${CLAUDE_PLUGIN_DATA}`
+### Manual synchronization uses `${CLAUDE_PLUGIN_DATA}`
 
 The status line must keep one path in `~/.claude/settings.json`, but `${CLAUDE_PLUGIN_ROOT}`
-changes on every plugin update. The hook copies the plugin's own `src/usage_statusline/` into
+changes on every plugin update. `/quotaline:install --sync` copies the plugin's own `src/usage_statusline/` into
 `${CLAUDE_PLUGIN_DATA}/src`, and only if you've already installed. It changes no settings
-and makes no network requests.
+and makes no network requests. No command hooks are shipped; users run synchronization after
+updating the plugin so the status line uses the new code.
 
 ## How it works
 

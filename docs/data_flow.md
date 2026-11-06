@@ -4,6 +4,19 @@ How data enters, changes, is stored, and leaves `usage_statusline` on one status
 Field-level formats are in `docs/DATA.md`; components and decisions are in
 `docs/architecture.md`.
 
+## Installation and manual updates
+
+1. The user invokes `/quotaline:install`. `skills/install/SKILL.md` runs the bundled
+   `install.sh --dest "${CLAUDE_PLUGIN_DATA}"` with the user's arguments.
+2. `install.sh` copies `src/usage_statusline` into `${CLAUDE_PLUGIN_DATA}/src` and calls
+   `settings_entry.main` to configure the status line in `~/.claude/settings.json`, with a
+   one-time backup. Normal installation also calls `agy_setup.main` unless `--no-agy` is set.
+3. After each plugin update, the user runs `/quotaline:install --sync`. The installer refreshes
+   only an existing code copy, then exits before reading settings or starting keyring setup.
+   Without an installed copy, synchronization does nothing. No session hook runs this step.
+4. `/quotaline:uninstall` removes the matching status line entry and its copied package.
+   Quota collection and its trust boundaries remain the runtime paths below.
+
 ## 0. Source selection and optional OmniRoute path
 
 1. `main.main()` calls `omniroute.omniroute_lines()` before reading stdin. Only an absent

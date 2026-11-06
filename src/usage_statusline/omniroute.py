@@ -385,7 +385,7 @@ def _ag_connection(
                     row_times.append(now)
                     continue
                 previous = _prior_row(record, "AG Argon local" + tag)
-            if previous is None:
+            if previous is None or record is None:
                 rendered.append(_error_line(QUOTA_ERROR, label + tag))
                 continue
             row, received = record["rows"][previous], _row_times(record)[previous]
