@@ -17,9 +17,12 @@ def test_marketplace_lists_this_plugin_by_its_manifest_name() -> None:
     assert entry == {**entry, "name": plugin["name"], "source": "./"}
 
 
-def test_hook_and_skills_call_the_installer_with_plugin_data() -> None:
-    hook = load("hooks/hooks.json")["hooks"]["SessionStart"][0]["hooks"][0]["command"]
-    assert "install.sh" in hook and "${CLAUDE_PLUGIN_DATA}" in hook and "--sync" in hook
+def test_plugin_declares_no_command_hooks() -> None:
+    assert not (ROOT / "hooks" / "hooks.json").exists()
+    assert "hooks" not in load(".claude-plugin/plugin.json")
+
+
+def test_skills_call_the_installer_with_plugin_data() -> None:
     for name in ("install", "uninstall"):
         text = (ROOT / "skills" / name / "SKILL.md").read_text()
         assert re.search(r"^disable-model-invocation: true$", text, re.M), name

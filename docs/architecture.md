@@ -1,5 +1,14 @@
 # Architecture
 
+## Manual plugin synchronization
+
+The plugin ships no command hooks. Installation copies its bundled Python package into the
+stable `${CLAUDE_PLUGIN_DATA}/src` path referenced by Claude Code's status line settings.
+After each plugin update, users run `/quotaline:install --sync` to refresh that copy. This
+existing installer mode changes no settings, performs no keyring setup, and does nothing
+without an installed copy. Removing session synchronization also removes a full package copy
+on every session start; copies now occur only during explicit installation or synchronization.
+
 ## Optional OmniRoute source (0.3.0)
 
 `main.py` calls `omniroute.omniroute_lines()` before reading stdin. Absence of
@@ -122,14 +131,14 @@ flowchart TB
     inst --> setup["0b. Keyring setup<br/><code>src/usage_statusline/agy_setup.py</code>"]
     keyring([system keyring via gdbus + secret-tool]) --> setup
     setup --> tok
-    skill["0c. Plugin skills + SessionStart hook<br/><code>skills/, hooks/hooks.json</code>"] --> inst
+    skill["0c. Manual plugin skills<br/><code>skills/</code>"] --> inst
     inst --> data([code copy in CLAUDE_PLUGIN_DATA/src])
 ```
 
 | Stage | Module | Reads | Writes |
 |---|---|---|---|
 | 0a. Installer | `install.sh` | `~/.claude/settings.json` | `statusLine` key, one-time `.bak-usage-statusline` backup, `DIR/src` with `--dest` |
-| 0c. Plugin | `skills/install`, `skills/uninstall`, `hooks/hooks.json` | `${CLAUDE_PLUGIN_ROOT}` | runs `install.sh --dest ${CLAUDE_PLUGIN_DATA}` (`--sync` at session start) |
+| 0c. Plugin | `skills/install`, `skills/uninstall` | `${CLAUDE_PLUGIN_ROOT}` | runs `install.sh --dest ${CLAUDE_PLUGIN_DATA}` (`--sync` manually after plugin updates) |
 | 0b. Keyring setup | `src/usage_statusline/agy_setup.py` | keyring labels and attributes, one secret lookup | `~/.config/usage-statusline/agy_token_cmd` |
 | 1. Entry point | `src/usage_statusline/main.py` | source selection, native stdin JSON | stdout |
 | Optional router source | `src/usage_statusline/omniroute.py` | explicit config, selected key file, loopback usage JSON, own cache | selected rows and own cache |
@@ -157,7 +166,7 @@ flowchart LR
 | `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (12 tests), verified on the real keyring on 2026-09-27 |
 | `src/usage_statusline/settings_entry.py` | Adds or removes the `statusLine` key in `settings.json`, run by `install.sh` | built (2 tests) |
 | `install.sh` | Installs or uninstalls the settings entry through `settings_entry`, then runs `agy_setup`. With `--dest`, runs from a copy | built (6 tests) |
-| `.claude-plugin/`, `skills/`, `hooks/` | Plugin manifest, `mlemes` marketplace, install and uninstall skills, and the sync hook | built (2 tests in `test_plugin.py`), `claude plugin validate .` passes |
+| `.claude-plugin/`, `skills/` | Plugin manifest, `mlemes` marketplace, install and uninstall skills; no command hooks | built (3 tests in `test_plugin.py`), `claude plugin validate .` passes |
 
 ### Public API of what is built
 - `omniroute.omniroute_lines(config: Path = CONFIG, cache: Path = CACHE, now: float | None = None) -> str | None`: `None` only for absent config; otherwise one source header, selected rows and sanitized errors, with 60 s attempt throttle and per-connection stale retention and independent AG row receipts.
@@ -178,9 +187,10 @@ flowchart LR
 - `agy_setup.main(argv, run=sh, which=shutil.which) -> int`: returns 0 when it saves the config, 1 otherwise. `run` takes an argv list and returns stdout, which tests replace with a fake keyring.
 - `settings_entry.update(settings, cmd, mode) -> str | None`: changes the dict in place; `mode` is `install` or `--uninstall`; returns `None` when uninstall finds another command. CLI: `python3 -m usage_statusline.settings_entry PATH CMD MODE`.
 - `install.sh [--uninstall] [--no-agy] [--agy-entry N] [--dest DIR [--sync]]`: the `CLAUDE_SETTINGS` env var overrides the settings path. Tests always pass `--no-agy`. `--dest DIR` swaps a fresh copy into `DIR/src` and points `statusLine` there. `--uninstall --dest DIR` also deletes `DIR/src`. `--sync` refreshes `DIR/src` only if it exists and never touches settings. Reinstalling with the same command leaves the existing `statusLine` entry, including user options such as `refreshInterval`, unchanged. A non-object `statusLine` value is replaced on install and ignored on uninstall.
-- Plugin: `/quotaline:install [--no-agy] [--agy-entry N]` and `/quotaline:uninstall`, both `disable-model-invocation: true`.
+- Plugin: `/quotaline:install [--no-agy] [--agy-entry N] [--sync]` and `/quotaline:uninstall`, both `disable-model-invocation: true`.
 
 ## Key decisions
+- 2026-11-06: Removed the command SessionStart hook because the directory accepts command hooks only from Verified organizations. `/quotaline:install --sync` retains explicit updates to the stable code copy; quota collection and credential handling are unchanged. The historical hook decision below describes the previous behavior.
 - 2026-09-29: The README section "Use with antigravity-for-claude-code and the Codex plugin", the manifest, and the marketplace entry also name OpenAI's Codex plugin (github.com/openai/codex-plugin-cc, installed as `codex@openai-codex`), at your request, now that quotaline has a Codex line. The version stays 0.2.0 because only docs changed. quotaline doesn't depend on either plugin or call it.
 - 2026-09-28: A Codex line reads the `rate_limits` that Codex CLI records in its session transcripts, at your request. It needs no credential, no network request, and no setup step, so it adds nothing for the plugin reviewer to flag. The trade-off is freshness: the numbers date from the last Codex response on this machine. A past reset time shows as `0%` and `--`. The ChatGPT usage endpoint with the token from `~/.codex/auth.json` was rejected because it forwards a credential to an undocumented API.
 - 2026-09-28: Codex windows are placed by `window_minutes`, not by `primary`/`secondary`, because the free and Go plans have one 30-day `primary` window. The second column's label shows the length (`30d`) when it isn't a week, padded to the width of `week`.

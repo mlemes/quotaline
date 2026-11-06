@@ -4,7 +4,7 @@
 # pick an entry with --agy-entry N when several match).
 # --dest DIR copies the code to DIR/src and runs it from there. The plugin uses its
 # ${CLAUDE_PLUGIN_DATA}, which keeps its path across plugin updates. --sync only refreshes
-# an existing DIR/src copy and touches no settings (the plugin's SessionStart hook).
+# an existing DIR/src copy and touches no settings (manual plugin synchronization after updates).
 # Idempotent. Backs up the settings file once, before the first change.
 set -euo pipefail
 
@@ -58,7 +58,7 @@ mkdir -p "$(dirname "$settings")"
 PYTHONPATH="$here/src" python3 -m usage_statusline.settings_entry "$settings" "$cmd" "$mode"
 
 if [ "$mode" = --uninstall ] && [ -n "$dest" ]; then
-  rm -rf "$dest/src"  # stops the SessionStart hook from recreating it
+  rm -rf "$dest/src"  # removes the copied package during explicit plugin uninstallation
 fi
 if [ "$mode" = install ] && [ "$agy" = yes ]; then
   PYTHONPATH="$src" python3 -m usage_statusline.agy_setup "${agy_args[@]}" || true
