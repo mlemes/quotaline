@@ -183,3 +183,8 @@ unless `--no-agy` is passed; runtime source selection does not change installer 
 
 - Input: last 256 KiB of up to 3 newest `$CODEX_HOME/sessions/**/rollout-*.jsonl`.
 - Output: one row, or nothing when the sessions directory is missing. No network, no cache.
+
+## OpenCode Go row
+`main._native` calls `opencode_line()`. It returns the cached row if under 60 s old. Otherwise it
+reads the `opencode-go` key, calls the Go usage URL once, formats `rolling`/`weekly`, and writes the cache.
+No key returns None, so the row is hidden. Router mode (OmniRoute) does not include this row.

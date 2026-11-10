@@ -10,6 +10,7 @@ Claude         session  24% · resets Sun 20:00 | week  41% · resets Thu 21:13
 AG Gemini      session   0% · resets Sun 16:02 | week  14% · resets Mon 23:28
 AG Claude/GPT  session   0% · resets Sun 16:02 | week  19% · resets Sun 00:50
 Codex          session   3% · resets Sun 19:40 | week  12% · resets Fri 08:15
+OpenCode Go    session  12% · resets Sun 21:00 | week  34% · resets Wed 09:00
 ```
 
 **AG Gemini** covers Gemini models when their reported quotas match; differing model quotas
@@ -17,6 +18,10 @@ get separate rows. If Google omits the Gemini summary, its row shows `quota` wit
 time and no weekly value. **AG Claude/GPT** covers Claude and GPT models in Antigravity. **Codex** reads the usage that Codex CLI records on your
 machine (see "How it works"). Its second column reads `week` for a weekly window, or the window
 length, such as `30d` on the single 30-day window of the free and Go plans.
+**OpenCode Go** shows the 5-hour and weekly usage that `https://opencode.ai/inference/go/v1/usage`
+reports for your `opencode-go` API key. The key comes from `~/.pi/agent/auth.json` or
+`~/.local/share/opencode/auth.json`; the row is hidden without it. The plugin sends the key only
+to that URL, at most once every 60 seconds (cache `~/.cache/usage-statusline/opencode.json`).
 
 ## Use with antigravity-for-claude-code and the Codex plugin
 
