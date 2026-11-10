@@ -5,6 +5,7 @@ from usage_statusline.antigravity import antigravity_line
 from usage_statusline.claude import claude_line
 from usage_statusline.codex import codex_line
 from usage_statusline.omniroute import omniroute_lines
+from usage_statusline.opencode import opencode_line
 
 # Rows without live data: errors, stale cache, or a provider that is absent or not yet used.
 UNUSABLE = ("n/a (", "stale (", "no usage yet", "usage appears after")
@@ -33,7 +34,7 @@ def _native() -> list[str]:
     if not isinstance(data, dict):
         data = {}
     lines: list[str] = []
-    for source in (lambda: claude_line(data), antigravity_line, codex_line):
+    for source in (lambda: claude_line(data), antigravity_line, codex_line, opencode_line):
         try:
             lines.extend(_usable(source()))
         except Exception:  # A provider failure must not suppress the other providers.

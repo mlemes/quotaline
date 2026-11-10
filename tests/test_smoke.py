@@ -9,6 +9,7 @@ from usage_statusline import main as m
 @pytest.fixture(autouse=True)
 def absent_router_config(monkeypatch):
     monkeypatch.setattr(m, "omniroute_lines", lambda: None, raising=False)
+    monkeypatch.setattr(m, "opencode_line", lambda: None)
 
 
 def _stdin(monkeypatch, text="{}"):
@@ -30,6 +31,14 @@ def test_prints_each_live_provider(monkeypatch, capsys) -> None:
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("Claude") and "10%" in lines[0]
     assert lines[1:] == ["Antigravity  x", "Codex  y"]
+
+
+def test_prints_opencode_row(monkeypatch, capsys) -> None:
+    _natives(monkeypatch, agy=None, codex=None)
+    monkeypatch.setattr(m, "opencode_line", lambda: "OpenCode Go  z")
+    _stdin(monkeypatch)
+    m.main()
+    assert capsys.readouterr().out == "OpenCode Go  z\n"
 
 
 def test_claude_without_usage_is_hidden(monkeypatch, capsys) -> None:

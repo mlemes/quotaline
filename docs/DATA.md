@@ -170,3 +170,16 @@ unselected account is stored. Configuration changes invalidate scope. Failed att
 throttle 60 s. Unreadable/corrupt/future timestamps are misses. Atomic 0600 replacement and
 best-effort writes preserve output if storage fails. Failed connections retain their pristine
 last successful rows marked `stale (received …)` plus error; other connections can update.
+
+## OpenCode Go `GET /inference/go/v1/usage` response (used)
+- Source: `GET https://opencode.ai/inference/go/v1/usage` with `Authorization: Bearer <opencode-go key>`.
+  Shape taken from `quality-agent-stack` `agentops/go_usage.py`. Not yet verified live by this project.
+
+| Field | Type | Notes |
+|---|---|---|
+| `usage.rolling`, `.weekly`, `.monthly` | object | Exactly these three periods. The line shows `rolling` and `weekly` |
+| `<period>.status` | string | Must be `ok`, else the row is `n/a (ValueError)` |
+| `<period>.percent` | number | 0 to 100 |
+| `<period>.resetsAt` | string | RFC 3339 with timezone |
+
+**Quirks:** redirects are rejected so the key never leaves `opencode.ai`.

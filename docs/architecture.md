@@ -144,7 +144,9 @@ flowchart TB
 | Optional router source | `src/usage_statusline/omniroute.py` | explicit config, selected key file, loopback usage JSON, own cache | selected rows and own cache |
 | 2. Claude line | `src/usage_statusline/claude.py` | `rate_limits` in the JSON | one line, plus the shared column layout |
 | 3. Antigravity lines | `src/usage_statusline/antigravity.py` | token command, API, cache | cache file, one line per quota group |
-| 4. Codex line | `src/usage_statusline/codex.py` | last 256 KiB of up to 3 newest `rollout-*.jsonl` | one line, or nothing without `~/.codex/sessions` |
+| 5. OpenCode Go line | `src/usage_statusline/opencode.py` | `GET https://opencode.ai/inference/go/v1/usage` with the `opencode-go` key from `~/.pi/agent/auth.json` or `~/.local/share/opencode/auth.json`; 60 s cache | one line (`rolling` as session, `weekly` as week), or nothing without a key |
+| 4. Codex line | `src/usage_statusline/opencode.py` | Fetches Go usage periods, caches the formatted row, hides without a key | built (tests/test_opencode.py); endpoint shape from `quality-agent-stack` `go_usage.py`, not yet verified live |
+| `src/usage_statusline/codex.py` | last 256 KiB of up to 3 newest `rollout-*.jsonl` | one line, or nothing without `~/.codex/sessions` |
 
 Core structure (one quota group after parsing, rendered with the shared layout):
 
