@@ -1,12 +1,25 @@
 {
   "name": "mlemes",
   "description": "Claude Code plugins by Marcus Lemes",
-  "owner": { "name": "Marcus Lemes", "url": "https://github.com/mlemes" },
+  "owner": {
+    "name": "Marcus Lemes",
+    "url": "https://github.com/mlemes"
+  },
   "plugins": [
     {
       "name": "quotaline",
       "source": "./",
       "description": "Status line with your Claude Pro, Antigravity, and Codex session and weekly quota usage, with reset times. Built to pair with antigravity-for-claude-code and OpenAI's Codex plugin."
+    },
+    {
+      "name": "ml-referee",
+      "source": {
+        "source": "github",
+        "repo": "mlemes/ml-referee",
+        "ref": "release/claude-plugin-0.1.0",
+        "sha": "e9f3f49633c61e474a9727440abd052003f04378"
+      },
+      "description": "Seal holdout data, audit leakage, and record budgeted model claims. Requires the Python package and its dependencies in the environment used to launch Claude Code."
     }
   ]
 }

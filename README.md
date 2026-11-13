@@ -77,6 +77,29 @@ and skips keyring setup; it does nothing if the status line isn't installed. The
 no hooks, so synchronization is manual. To remove the status line,
 run `/quotaline:uninstall`, then `claude plugin uninstall quotaline@mlemes`.
 
+## Other plugins in the mlemes marketplace
+
+This repository hosts the `mlemes` marketplace. It lists `quotaline@mlemes` and
+[`ml-referee@mlemes`](https://github.com/mlemes/ml-referee/tree/release/claude-plugin-0.1.0),
+which seals ML holdout data, audits leakage, and records budgeted evaluations.
+The plugins install independently; ml-referee keeps its guard and recorder hooks.
+
+ml-referee needs Python 3.11 or later and its Python dependencies. Install the package
+from the same commit pinned in the catalog, then install the Claude Code plugin:
+
+```bash
+python3 -m venv ~/.venvs/ml-referee
+source ~/.venvs/ml-referee/bin/activate
+python -m pip install 'git+https://github.com/mlemes/ml-referee.git@e9f3f49633c61e474a9727440abd052003f04378'
+claude plugin install ml-referee --marketplace mlemes/quotaline
+```
+
+Keep this environment active when launching Claude Code from your ML project, so the
+hooks' `python3` can import the required dependencies. Follow the
+[ml-referee setup instructions](https://github.com/mlemes/ml-referee/blob/release/claude-plugin-0.1.0/README.md)
+to configure the project and seal the data from your own terminal before training.
+Marketplace installation alone does not install Python dependencies or seal data.
+
 ## Install from a clone
 
 1. Run the installer:

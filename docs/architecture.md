@@ -1,5 +1,14 @@
 # Architecture
 
+## Marketplace distribution
+
+`.claude-plugin/marketplace.json` publishes the `mlemes` catalog. Quotaline uses this
+repository's root; ml-referee comes from `mlemes/ml-referee`, pinned to the reviewed
+release commit. They are independently installed plugins with separate runtime code.
+The catalog preserves ml-referee's own hook definitions and does not make it a
+dependency of Quotaline. Updating ml-referee requires reviewing a new commit and
+updating the catalog pin and matching package-install command in the README.
+
 ## Manual plugin synchronization
 
 The plugin ships no command hooks. Installation copies its bundled Python package into the

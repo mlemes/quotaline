@@ -4,6 +4,14 @@ How data enters, changes, is stored, and leaves `usage_statusline` on one status
 Field-level formats are in `docs/DATA.md`; components and decisions are in
 `docs/architecture.md`.
 
+## Marketplace installation
+
+Claude Code reads the `mlemes` catalog from `mlemes/quotaline`. Installing Quotaline
+uses the repository root; installing ml-referee fetches the pinned commit from its
+own GitHub repository into Claude Code's plugin cache. Each plugin retains its own
+components. Installing ml-referee does not send datasets through Quotaline. Its
+Python package dependencies are installed separately as documented in the README.
+
 ## Installation and manual updates
 
 1. The user invokes `/quotaline:install`. `skills/install/SKILL.md` runs the bundled

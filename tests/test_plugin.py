@@ -13,7 +13,7 @@ def test_marketplace_lists_this_plugin_by_its_manifest_name() -> None:
     plugin, market = load(".claude-plugin/plugin.json"), load(".claude-plugin/marketplace.json")
     pyproject = (ROOT / "pyproject.toml").read_text()
     assert f'version = "{plugin["version"]}"' in pyproject  # users update only on a bump
-    [entry] = market["plugins"]
+    [entry] = [item for item in market["plugins"] if item["name"] == plugin["name"]]
     assert entry == {**entry, "name": plugin["name"], "source": "./"}
 
 
