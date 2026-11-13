@@ -2,12 +2,14 @@
 
 ## Marketplace distribution
 
-`.claude-plugin/marketplace.json` publishes the `mlemes` catalog. Quotaline uses this
-repository's root; ml-referee comes from `mlemes/ml-referee`, pinned to the reviewed
-release commit. They are independently installed plugins with separate runtime code.
-The catalog preserves ml-referee's own hook definitions and does not make it a
-dependency of Quotaline. Updating ml-referee requires reviewing a new commit and
-updating the catalog pin and matching package-install command in the README.
+The canonical `mlemes` catalog lives in `mlemes/claude-plugins`. It references
+Quotaline and ml-referee in their own repositories at pinned commits. They remain
+independently installed plugins with separate runtimes. Release updates belong in
+the shared catalog; ml-referee's matching Python installation pin is maintained there.
+
+This repository's `.claude-plugin/marketplace.json` remains a compatibility catalog
+for existing users. Registering `mlemes/claude-plugins` switches the source while
+preserving plugin identifiers; adding the previous source restores it.
 
 ## Manual plugin synchronization
 
@@ -112,7 +114,7 @@ from Google's Code Assist API and cached; Gemini model fallback can add separate
 The last shows Codex CLI usage, read from the tail of Codex's own session
 transcripts, with no network request. `install.sh` wires the command into
 `~/.claude/settings.json`. The same repository is published as the Claude Code plugin `quotaline`, and it's also its
-own marketplace (`quotaline@mlemes`), whose skills run `install.sh` for you. It's built to pair
+legacy marketplace host (`quotaline@mlemes`); the canonical catalog is `mlemes/claude-plugins`. Its skills run `install.sh` for you. It's built to pair
 with the `antigravity-for-claude-code` plugin and OpenAI's Codex plugin (`codex-plugin-cc`), which
 hand work off from Claude Code to `agy` and Codex, so you can watch and balance all three quotas.
 

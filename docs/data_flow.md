@@ -6,11 +6,15 @@ Field-level formats are in `docs/DATA.md`; components and decisions are in
 
 ## Marketplace installation
 
-Claude Code reads the `mlemes` catalog from `mlemes/quotaline`. Installing Quotaline
-uses the repository root; installing ml-referee fetches the pinned commit from its
-own GitHub repository into Claude Code's plugin cache. Each plugin retains its own
-components. Installing ml-referee does not send datasets through Quotaline. Its
-Python package dependencies are installed separately as documented in the README.
+Claude Code reads the canonical `mlemes` catalog from `mlemes/claude-plugins`.
+Installing either plugin fetches its pinned commit from its own GitHub repository
+into Claude Code's plugin cache. Each plugin retains its own components. The catalog
+receives no datasets or quota credentials. ML Referee's Python dependencies require
+separate installation as documented in the marketplace README.
+
+The older catalog in `mlemes/quotaline` still resolves Quotaline from its repository
+root and ml-referee from its pinned GitHub source. Re-registering the marketplace
+changes only the catalog source; plugin identifiers stay unchanged.
 
 ## Installation and manual updates
 

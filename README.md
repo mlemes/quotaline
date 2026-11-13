@@ -44,7 +44,7 @@ claude plugin marketplace add yuting0624/antigravity-for-claude-code
 claude plugin install antigravity@antigravity-for-claude-code
 claude plugin marketplace add openai/codex-plugin-cc
 claude plugin install codex@openai-codex
-claude plugin marketplace add mlemes/quotaline
+claude plugin marketplace add mlemes/claude-plugins
 claude plugin install quotaline@mlemes
 ```
 
@@ -62,7 +62,7 @@ quotaline works on its own as well. It doesn't need either plugin, and it doesn'
 1. Add the marketplace and install the plugin:
 
    ```bash
-   claude plugin marketplace add mlemes/quotaline
+   claude plugin marketplace add mlemes/claude-plugins
    claude plugin install quotaline@mlemes
    ```
 
@@ -77,28 +77,19 @@ and skips keyring setup; it does nothing if the status line isn't installed. The
 no hooks, so synchronization is manual. To remove the status line,
 run `/quotaline:uninstall`, then `claude plugin uninstall quotaline@mlemes`.
 
-## Other plugins in the mlemes marketplace
+## Marketplace
 
-This repository hosts the `mlemes` marketplace. It lists `quotaline@mlemes` and
-[`ml-referee@mlemes`](https://github.com/mlemes/ml-referee/tree/release/claude-plugin-0.1.0),
-which seals ML holdout data, audits leakage, and records budgeted evaluations.
-The plugins install independently; ml-referee keeps its guard and recorder hooks.
+The shared [mlemes marketplace](https://github.com/mlemes/claude-plugins) has its own repository. It lists Quotaline and [ML Referee](https://github.com/mlemes/ml-referee/tree/release/claude-plugin-0.1.0); each plugin keeps its own code and release history.
 
-ml-referee needs Python 3.11 or later and its Python dependencies. Install the package
-from the same commit pinned in the catalog, then install the Claude Code plugin:
+For ML Referee installation and Python setup, see the [marketplace instructions](https://github.com/mlemes/claude-plugins#ml-referee).
+
+Existing users can switch the marketplace source with:
 
 ```bash
-python3 -m venv ~/.venvs/ml-referee
-source ~/.venvs/ml-referee/bin/activate
-python -m pip install 'git+https://github.com/mlemes/ml-referee.git@e9f3f49633c61e474a9727440abd052003f04378'
-claude plugin install ml-referee --marketplace mlemes/quotaline
+claude plugin marketplace add mlemes/claude-plugins
 ```
 
-Keep this environment active when launching Claude Code from your ML project, so the
-hooks' `python3` can import the required dependencies. Follow the
-[ml-referee setup instructions](https://github.com/mlemes/ml-referee/blob/release/claude-plugin-0.1.0/README.md)
-to configure the project and seal the data from your own terminal before training.
-Marketplace installation alone does not install Python dependencies or seal data.
+Plugin identifiers remain `quotaline@mlemes` and `ml-referee@mlemes`. The catalog in this repository remains available for compatibility.
 
 ## Install from a clone
 
