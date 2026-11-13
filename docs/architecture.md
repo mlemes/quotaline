@@ -2,14 +2,10 @@
 
 ## Marketplace distribution
 
-The canonical `mlemes` catalog lives in `mlemes/claude-plugins`. It references
-Quotaline and ml-referee in their own repositories at pinned commits. They remain
-independently installed plugins with separate runtimes. Release updates belong in
-the shared catalog; ml-referee's matching Python installation pin is maintained there.
-
-This repository's `.claude-plugin/marketplace.json` remains a compatibility catalog
-for existing users. Registering `mlemes/claude-plugins` switches the source while
-preserving plugin identifiers; adding the previous source restores it.
+The `mlemes` catalog lives in `mlemes/claude-plugins` and references a pinned
+commit of this repository. Quotaline owns its plugin manifest, skills and runtime;
+the marketplace owns discovery and release pins. No marketplace catalog is shipped
+in this repository.
 
 ## Manual plugin synchronization
 
@@ -113,8 +109,8 @@ group each (Gemini, Claude/GPT, and Argon) with its available 5-hour and weekly 
 from Google's Code Assist API and cached; Gemini model fallback can add separate quota rows.
 The last shows Codex CLI usage, read from the tail of Codex's own session
 transcripts, with no network request. `install.sh` wires the command into
-`~/.claude/settings.json`. The same repository is published as the Claude Code plugin `quotaline`, and it's also its
-legacy marketplace host (`quotaline@mlemes`); the canonical catalog is `mlemes/claude-plugins`. Its skills run `install.sh` for you. It's built to pair
+`~/.claude/settings.json`. This repository is published as the Claude Code plugin
+`quotaline@mlemes` through `mlemes/claude-plugins`. Its skills run `install.sh` for you. It's built to pair
 with the `antigravity-for-claude-code` plugin and OpenAI's Codex plugin (`codex-plugin-cc`), which
 hand work off from Claude Code to `agy` and Codex, so you can watch and balance all three quotas.
 
@@ -179,7 +175,7 @@ flowchart LR
 | `src/usage_statusline/agy_setup.py` | Finds the agy keyring entry and saves the token command | built (12 tests), verified on the real keyring on 2026-09-27 |
 | `src/usage_statusline/settings_entry.py` | Adds or removes the `statusLine` key in `settings.json`, run by `install.sh` | built (2 tests) |
 | `install.sh` | Installs or uninstalls the settings entry through `settings_entry`, then runs `agy_setup`. With `--dest`, runs from a copy | built (6 tests) |
-| `.claude-plugin/`, `skills/` | Plugin manifest, `mlemes` marketplace, install and uninstall skills; no command hooks | built (3 tests in `test_plugin.py`), `claude plugin validate .` passes |
+| `.claude-plugin/`, `skills/` | Plugin manifest, install and uninstall skills; no command hooks | built (3 tests in `test_plugin.py`), `claude plugin validate .` passes |
 
 ### Public API of what is built
 - `omniroute.omniroute_lines(config: Path = CONFIG, cache: Path = CACHE, now: float | None = None) -> str | None`: `None` only for absent config; otherwise one source header, selected rows and sanitized errors, with 60 s attempt throttle and per-connection stale retention and independent AG row receipts.

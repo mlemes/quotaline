@@ -79,17 +79,7 @@ run `/quotaline:uninstall`, then `claude plugin uninstall quotaline@mlemes`.
 
 ## Marketplace
 
-The shared [mlemes marketplace](https://github.com/mlemes/claude-plugins) has its own repository. It lists Quotaline and [ML Referee](https://github.com/mlemes/ml-referee/tree/release/claude-plugin-0.1.0); each plugin keeps its own code and release history.
-
-For ML Referee installation and Python setup, see the [marketplace instructions](https://github.com/mlemes/claude-plugins#ml-referee).
-
-Existing users can switch the marketplace source with:
-
-```bash
-claude plugin marketplace add mlemes/claude-plugins
-```
-
-Plugin identifiers remain `quotaline@mlemes` and `ml-referee@mlemes`. The catalog in this repository remains available for compatibility.
+Quotaline is distributed through the [mlemes marketplace](https://github.com/mlemes/claude-plugins). This repository contains only the Quotaline plugin; the marketplace catalog lives in its own repository.
 
 ## Install from a clone
 
