@@ -330,6 +330,30 @@ These are the default native readers; optional OmniRoute mode replaces this runt
   was verified on Codex CLI 0.158.0.
 - A missing window shows `--` and keeps its width, so the columns stay aligned.
 
+## Acceptance checks
+
+`scripts/quota_acceptance.py` runs the real status-line CLI in a fresh interpreter and compares
+exact stdout, empty stderr and the exit status. The baseline controls cover a normal fixed-reset
+line and hidden reset-only, empty and malformed input. The full run also covers a 37% window
+with its reset omitted or null, an aligned 0% session with an unknown reset and a 41% week
+with a fixed reset, and missing usage with no invented rate.
+
+```bash
+python3 scripts/quota_acceptance.py . --controls-only
+python3 scripts/quota_acceptance.py .
+python3 scripts/quota_acceptance.py . --container
+```
+
+Use the host commands for sources you trust. The checker uses a UTC/C locale, and host mode
+starts with an empty HOME and working directory. Container mode fetches the pinned Linux x64
+Python image if needed, then mounts only the candidate `src` read-only for offline execution.
+
+GitHub Actions runs candidate controls in a restricted container. Independent acceptance uses
+the checker from the exact base commit and the CLI from the exact head commit. The independent
+job is skipped during bootstrap while the base lacks a checker. The PR can change the
+`pull_request` workflow, so review workflow changes before relying on this check for a merge
+decision.
+
 ## Privacy
 
 quotaline sends no data to its author and has no telemetry. [PRIVACY.md](PRIVACY.md) lists what it
