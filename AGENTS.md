@@ -58,11 +58,15 @@ python3 -m ruff check .
 
 ## Review and merge gates
 
-Follow these steps when preparing a Quotaline PR for a human merge decision.
+Follow these steps before accepting a Quotaline PR.
 
-- Run focused and full pytest, full Ruff, and the relevant CI checks on the latest PR commit.
-  For status-line behavior, run an offline replay
-  against expectations maintained independently of the proposed change.
+- Run focused and full pytest and full Ruff on the latest PR commit. Check the
+  `Candidate controls` and `Independent acceptance (base-owned checker)` jobs in the
+  [Quota acceptance workflow](.github/workflows/quota-acceptance.yml).
+- For status-line changes, use a checkout of the reviewed base to run
+  `python3 scripts/quota_acceptance.py /path/to/candidate --container`. The base supplies the
+  [synthetic cases and expected output](scripts/quota_acceptance.py). The candidate supplies
+  the CLI. See [Acceptance checks](README.md#acceptance-checks) for setup.
 - Obtain a completed Qodo review on that same latest SHA. On every new commit, rerun the checks
   and obtain a new completed review.
 - Fix every valid High or Medium finding, regardless of finding type or source, and report Low
@@ -70,5 +74,7 @@ Follow these steps when preparing a Quotaline PR for a human merge decision.
 - If a gate fails, allow at most one repair attempt. If gates remain unresolved, record the
   unresolved commands/findings and exact SHA, then stop for a human decision. Do not bypass,
   weaken tests, or change configuration to force a pass.
-- Humans have merge authority. Agents must not merge, dismiss review findings, or alter branch
-  protection or repository administration.
+- The owner may explicitly assign review and merge of identified PRs to the project
+  orchestrator. Record the authorization, tested commit and gate results before merging.
+  Other merge decisions, finding dismissals, branch protection and repository administration
+  stay with the owner.
