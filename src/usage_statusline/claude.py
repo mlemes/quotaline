@@ -43,11 +43,16 @@ def claude_line(data: dict) -> str:
     limits = data.get("rate_limits") or {}
     windows = []
     for key in ("five_hour", "seven_day"):
-        w = limits.get(key)
-        if w and w.get("used_percentage") is not None and w.get("resets_at"):
-            windows.append((w["used_percentage"], datetime.fromtimestamp(w["resets_at"])))
-        else:
+        window = limits.get(key) or {}
+        used_percentage = window.get("used_percentage")
+        timestamp = window.get("resets_at")
+        if type(used_percentage) not in (int, float) or (
+            timestamp is not None and type(timestamp) not in (int, float)
+        ):
             windows.append(None)
+            continue
+        reset = datetime.fromtimestamp(timestamp) if timestamp is not None else None
+        windows.append((used_percentage, reset))
     if windows == [None, None]:
         return fmt_line("Claude", "usage appears after the first reply")
     return fmt_line("Claude", fmt_windows(windows[0], windows[1]))
