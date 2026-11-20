@@ -19,6 +19,9 @@ Optional OmniRoute mode reads only the selected local quota snapshots described 
   session's first API response.
 - Each window can be absent independently. Claude Code drops a window once its `resets_at`
   time passes.
+- A malformed window shows the usual placeholder while a valid sibling still displays. This
+  covers nonobject windows, percentages that cannot be represented as finite numbers, and
+  invalid reset types or timestamps. An omitted or null reset displays as `resets --`.
 
 ## Antigravity `retrieveUserQuotaSummary` response (used)
 - Source: `POST https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`
