@@ -4,6 +4,7 @@ Also holds the shared line layout, so every provider's columns align:
 label padded to LABEL_WIDTH, percent right-aligned to 3 digits, fixed-width reset.
 """
 
+import math
 from datetime import datetime
 
 LABEL_WIDTH = 15  # longest label is "AG Claude/GPT" (13) plus two spaces
@@ -38,16 +39,31 @@ def fmt_windows(
     return " | ".join(parts).rstrip()
 
 
+def _claude_window(window: object) -> tuple[float, datetime | None] | None:
+    if not isinstance(window, dict):
+        return None
+    used_percentage = window.get("used_percentage")
+    timestamp = window.get("resets_at")
+    if type(used_percentage) not in (int, float) or (
+        timestamp is not None and type(timestamp) not in (int, float)
+    ):
+        return None
+    try:
+        if not math.isfinite(used_percentage):
+            return None
+        reset = datetime.fromtimestamp(timestamp) if timestamp is not None else None
+    except (ValueError, OverflowError, OSError):
+        return None
+    return used_percentage, reset
+
+
 def claude_line(data: dict) -> str:
     """One line with the 5-hour and 7-day windows; each may be absent."""
-    limits = data.get("rate_limits") or {}
-    windows = []
-    for key in ("five_hour", "seven_day"):
-        w = limits.get(key)
-        if w and w.get("used_percentage") is not None and w.get("resets_at"):
-            windows.append((w["used_percentage"], datetime.fromtimestamp(w["resets_at"])))
-        else:
-            windows.append(None)
-    if windows == [None, None]:
+    limits = data.get("rate_limits")
+    if not isinstance(limits, dict):
+        limits = {}
+    session = _claude_window(limits.get("five_hour"))
+    week = _claude_window(limits.get("seven_day"))
+    if session is None and week is None:
         return fmt_line("Claude", "usage appears after the first reply")
-    return fmt_line("Claude", fmt_windows(windows[0], windows[1]))
+    return fmt_line("Claude", fmt_windows(session, week))

@@ -113,8 +113,11 @@ unless `--no-agy` is passed; runtime source selection does not change installer 
 
 ## 2. Claude line: `claude.claude_line(data)` (`src/usage_statusline/claude.py`)
 
-- Input: `rate_limits.five_hour` and `rate_limits.seven_day` from stdin (percent, epoch reset).
-- Output: one row via `fmt_line`/`fmt_windows`. No network, no files.
+- The entry point supplies `rate_limits.five_hour` and `rate_limits.seven_day` from parsed stdin.
+  Each window can contain a `used_percentage` and an optional epoch timestamp in `resets_at`.
+- With a reported percentage, `fmt_windows` displays it even if the reset is omitted or null.
+  The reset then reads `--`. A window without a percentage keeps its column placeholder.
+  When both percentages are missing, the entry point hides the Claude row.
 
 ## 3. Antigravity lines (`src/usage_statusline/antigravity.py`)
 
