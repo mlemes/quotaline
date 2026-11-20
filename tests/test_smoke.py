@@ -1,5 +1,6 @@
 import io
 import json
+from datetime import datetime
 
 import pytest
 
@@ -19,6 +20,13 @@ def _stdin(monkeypatch, text="{}"):
 def _natives(monkeypatch, agy="Antigravity  x", codex="Codex  y"):
     monkeypatch.setattr(m, "antigravity_line", lambda: agy)
     monkeypatch.setattr(m, "codex_line", lambda: codex)
+
+
+def _claude_output(monkeypatch, capsys, **windows):
+    _natives(monkeypatch, agy=None, codex=None)
+    _stdin(monkeypatch, json.dumps({"rate_limits": windows}))
+    m.main()
+    return capsys.readouterr().out.rstrip("\n")
 
 
 LIVE_CLAUDE = {"rate_limits": {"five_hour": {"used_percentage": 10, "resets_at": 4102444800}}}
@@ -48,6 +56,110 @@ def test_claude_without_usage_is_hidden(monkeypatch, capsys) -> None:
     assert capsys.readouterr().out == "Antigravity  x\n"
 
 
+@pytest.mark.parametrize("reset_fields", [{}, {"resets_at": None}], ids=["omitted", "null"])
+def test_claude_usage_without_reset(monkeypatch, capsys, reset_fields) -> None:
+    row = _claude_output(monkeypatch, capsys, five_hour={"used_percentage": 37, **reset_fields})
+    session, _, week = row.partition(" | ")
+    assert session.rstrip() == "Claude         session  37% · resets --"
+    assert week == "week   --"
+
+
+@pytest.mark.parametrize(
+    "bad_reset",
+    [False, "", [], {}, 1e18, float("nan")],
+    ids=["false", "empty-str", "list", "object", "out-of-range-float", "nan"],
+)
+def test_claude_malformed_reset_keeps_row_and_week(monkeypatch, capsys, bad_reset) -> None:
+    reset = 1738425600
+    row = _claude_output(
+        monkeypatch,
+        capsys,
+        five_hour={"used_percentage": 37, "resets_at": bad_reset},
+        seven_day={"used_percentage": 41, "resets_at": reset},
+    )
+    session, _, week = row.partition(" | ")
+    assert session.rstrip() == "Claude         session   --"
+    reset_text = datetime.fromtimestamp(reset).astimezone().strftime("%a %H:%M")
+    assert week == f"week  41% · resets {reset_text}"
+
+
+@pytest.mark.parametrize(
+    "bad_usage",
+    ["unknown", False, float("nan"), float("inf"), 10**309],
+    ids=["string", "false", "nan", "inf", "unrepresentable-int"],
+)
+def test_claude_malformed_usage_keeps_row_and_week(monkeypatch, capsys, bad_usage) -> None:
+    reset = 1738425600
+    row = _claude_output(
+        monkeypatch,
+        capsys,
+        five_hour={"used_percentage": bad_usage},
+        seven_day={"used_percentage": 41, "resets_at": reset},
+    )
+    session, _, week = row.partition(" | ")
+    assert session.rstrip() == "Claude         session   --"
+    reset_text = datetime.fromtimestamp(reset).astimezone().strftime("%a %H:%M")
+    assert week == f"week  41% · resets {reset_text}"
+
+
+@pytest.mark.parametrize("bad_window", ["bad", 1, []], ids=["string", "int", "list"])
+def test_claude_malformed_window_keeps_row_and_week(monkeypatch, capsys, bad_window) -> None:
+    reset = 1738425600
+    row = _claude_output(
+        monkeypatch,
+        capsys,
+        five_hour=bad_window,
+        seven_day={"used_percentage": 41, "resets_at": reset},
+    )
+    session, _, week = row.partition(" | ")
+    assert session.rstrip() == "Claude         session   --"
+    reset_text = datetime.fromtimestamp(reset).astimezone().strftime("%a %H:%M")
+    assert week == f"week  41% · resets {reset_text}"
+
+
+def test_claude_finite_usage_overage_is_visible(monkeypatch, capsys) -> None:
+    row = _claude_output(monkeypatch, capsys, five_hour={"used_percentage": 101})
+    session, _, _ = row.partition(" | ")
+    assert session.rstrip() == "Claude         session 101% · resets --"
+
+
+def test_claude_epoch_zero_reset_is_a_real_time(monkeypatch, capsys) -> None:
+    row = _claude_output(monkeypatch, capsys, five_hour={"used_percentage": 37, "resets_at": 0})
+    epoch_text = datetime.fromtimestamp(0).astimezone().strftime("%a %H:%M")
+    assert f"resets {epoch_text}" in row
+    assert "resets --" not in row.partition(" | ")[0]
+
+
+def test_claude_zero_usage_without_reset_keeps_week_aligned(monkeypatch, capsys) -> None:
+    reset = 1738425600
+    week = {"used_percentage": 41, "resets_at": reset}
+    session = {"used_percentage": 0}
+    full = _claude_output(
+        monkeypatch, capsys, five_hour={**session, "resets_at": reset}, seven_day=week
+    )
+    row = _claude_output(monkeypatch, capsys, five_hour=session, seven_day=week)
+
+    left, _, right = row.partition(" | ")
+    assert left.rstrip() == "Claude         session   0% · resets --"
+    reset_text = datetime.fromtimestamp(reset).astimezone().strftime("%a %H:%M")
+    assert right == f"week  41% · resets {reset_text}"
+    assert row.index("|") == full.index("|")
+
+
+def test_claude_window_needs_a_reported_percentage(monkeypatch, capsys) -> None:
+    reset_only = {"resets_at": 1738425600}
+    row = _claude_output(
+        monkeypatch, capsys, five_hour=reset_only, seven_day={"used_percentage": 41}
+    )
+    session, _, week = row.partition(" | ")
+    assert session.rstrip() == "Claude         session   --"
+    assert week == "week  41% · resets --"
+    no_usage = _claude_output(
+        monkeypatch, capsys, five_hour=reset_only, seven_day={"used_percentage": None}
+    )
+    assert no_usage == ""
+
+
 @pytest.mark.parametrize("stdin", ["garbage", "null", "[]", "1"])
 def test_bad_stdin_is_tolerated(monkeypatch, capsys, stdin) -> None:
     _natives(monkeypatch)
@@ -56,7 +168,15 @@ def test_bad_stdin_is_tolerated(monkeypatch, capsys, stdin) -> None:
     assert capsys.readouterr().out.splitlines() == ["Antigravity  x", "Codex  y"]
 
 
-@pytest.mark.parametrize("payload", [{"rate_limits": 1}, {"rate_limits": {"five_hour": 1}}])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"rate_limits": 1},
+        {"rate_limits": "bad"},
+        {"rate_limits": []},
+        {"rate_limits": {"five_hour": 1}},
+    ],
+)
 def test_malformed_claude_input_is_hidden(monkeypatch, capsys, payload) -> None:
     _natives(monkeypatch)
     _stdin(monkeypatch, json.dumps(payload))

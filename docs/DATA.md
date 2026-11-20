@@ -10,15 +10,18 @@ Optional OmniRoute mode reads only the selected local quota snapshots described 
 | Field | Type | Notes |
 |---|---|---|
 | `rate_limits.five_hour.used_percentage` | number | 0 to 100 |
-| `rate_limits.five_hour.resets_at` | int | Unix epoch seconds |
+| `rate_limits.five_hour.resets_at` | int or null | Optional Unix epoch seconds |
 | `rate_limits.seven_day.used_percentage` | number | 0 to 100 |
-| `rate_limits.seven_day.resets_at` | int | Unix epoch seconds |
+| `rate_limits.seven_day.resets_at` | int or null | Optional Unix epoch seconds |
 
 **Quirks:**
 - `rate_limits` is present only for claude.ai Pro and Max subscribers, and only after the
   session's first API response.
 - Each window can be absent independently. Claude Code drops a window once its `resets_at`
   time passes.
+- A malformed window shows the usual placeholder while a valid sibling still displays. This
+  covers nonobject windows, percentages that cannot be represented as finite numbers, and
+  invalid reset types or timestamps. An omitted or null reset displays as `resets --`.
 
 ## Antigravity `retrieveUserQuotaSummary` response (used)
 - Source: `POST https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`

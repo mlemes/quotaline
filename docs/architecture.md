@@ -181,9 +181,9 @@ flowchart LR
 - `omniroute.omniroute_lines(config: Path = CONFIG, cache: Path = CACHE, now: float | None = None) -> str | None`: `None` only for absent config; otherwise one source header, selected rows and sanitized errors, with 60 s attempt throttle and per-connection stale retention and independent AG row receipts.
 - `omniroute.fetch_snapshot(key: str) -> dict`: fixed loopback authenticated GET, validates allowed/object/providers shape, no proxy or redirect.
 - `omniroute.parse_connection(snapshot: dict, selection: dict, ag_label: str | None = None) -> list[str]`: exact identity/provider and quota validation, shared formatting, or `ValueError` for unavailable/inconsistent data.
-- `claude.claude_line(data: dict) -> str`: never raises on missing fields.
+- `claude.claude_line(data: dict) -> str` tolerates missing fields. A reported percentage with an omitted or null reset displays with `resets --`.
 - `claude.LABEL_WIDTH = 15`: every line pads its label to this width.
-- `claude.fmt_window(label: str, used_pct: float, resets_at: datetime) -> str`: `"week  41% · resets Thu 09:00"` in local time, percent right-aligned to 3 digits.
+- `claude.fmt_window(label: str, used_pct: float, resets_at: datetime | None) -> str` formats a window such as `"week  41% · resets Thu 09:00"` in local time, with the percentage right-aligned to three digits.
 - `claude.fmt_line(label: str, body: str) -> str`: pads the label to `LABEL_WIDTH`. A longer label, such as `AG Argon local [alias]`, keeps two spaces before the body.
 - `claude.fmt_windows(session, week, labels=("session", "week")) -> str`: each window is `(used_pct, datetime | None) | None`. Joins with ` | `. A missing window prints `--` padded to full width. A `None` reset time prints `--` padded to the width of a real one (`claude.fmt_reset`).
 - `codex.latest_rate_limits(sessions: Path = SESSIONS) -> dict | None`: the `rate_limits` of the newest `token_count` event with `limit_id` `codex` or missing, each window given an epoch `resets_at` (converted from `resets_in_seconds` if needed). Never reads more than 256 KiB per file.
