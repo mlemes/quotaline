@@ -1,0 +1,100 @@
+name: Quota acceptance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  candidate-controls:
+    name: Candidate controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out candidate commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+
+      - name: Run candidate controls in a restricted container
+        env:
+          ACCEPTANCE_IMAGE: python:3.13-slim@sha256:48d884813cf44e927cf64c5529dd630dd3b18338c6dc727991eef9b71e934a20
+        run: |
+          docker run --rm --interactive \
+            --network none \
+            --read-only \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --user 65534:65534 \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777 \
+            --mount type=bind,src="$GITHUB_WORKSPACE/candidate",dst=/candidate,readonly \
+            --workdir /candidate \
+            --env HOME=/tmp \
+            --env TZ=UTC \
+            --env LC_ALL=C \
+            --env LANG=C \
+            "$ACCEPTANCE_IMAGE" \
+            python3 -I -B scripts/quota_acceptance.py /candidate --controls-only
+
+  detect-base-checker:
+    name: Detect base-owned independent checker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      available: ${{ steps.check.outputs.available }}
+    steps:
+      - name: Check out base commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+
+      - name: Check for the base-owned checker
+        id: check
+        run: |
+          if [ -f base/scripts/quota_acceptance.py ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Base-owned checker found; independent acceptance will run."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Independent acceptance skipped::The base branch has no scripts/quota_acceptance.py yet. Independent acceptance requires a checker in the base commit."
+            echo "Independent acceptance skipped: the base branch has no checker." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  independent-acceptance:
+    name: Independent acceptance (base-owned checker)
+    needs: detect-base-checker
+    if: needs.detect-base-checker.outputs.available == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out base commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+
+      - name: Check out candidate commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+
+      - name: Run the base-owned checker against candidate src
+        run: python3 -I -B base/scripts/quota_acceptance.py "$GITHUB_WORKSPACE/candidate" --container
