@@ -49,7 +49,7 @@ def _claude_window(window: object) -> tuple[float, datetime | None] | None:
     ):
         return None
     try:
-        if not math.isfinite(used_percentage):
+        if used_percentage == 0 or not math.isfinite(used_percentage):
             return None
         reset = datetime.fromtimestamp(timestamp) if timestamp is not None else None
     except (ValueError, OverflowError, OSError):
