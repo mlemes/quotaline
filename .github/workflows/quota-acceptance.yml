@@ -79,7 +79,7 @@ jobs:
               echo "- Expected base revision: \`$ACCEPTANCE_BASE_SHA\`"
               echo "- Expected candidate revision: \`$ACCEPTANCE_HEAD_SHA\`"
               echo "- Logs: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-            } >> "$GITHUB_STEP_SUMMARY"
+            } | tee -a "$GITHUB_STEP_SUMMARY"
           fi
 
   independent-acceptance:
@@ -145,4 +145,4 @@ jobs:
             echo "- Configured candidate revision: \`$ACCEPTANCE_HEAD_SHA\`"
             echo "- Checker outcome: \`${ACCEPTANCE_OUTCOME:-unknown}\`"
             echo "- Detailed job and synthetic expected/actual output: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/job/$ACCEPTANCE_JOB_ID"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
