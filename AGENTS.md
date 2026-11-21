@@ -47,7 +47,9 @@ python3 -m ruff check .
 3. **Keep true zero separate from missing or unknown.** Preserve a reported zero. Represent
    unavailable data with the provider’s existing markers or omitted rows. Keep usage and
    reset availability distinct so a missing reset never becomes a fabricated timestamp or
-   percentage. Historical values stay historical.
+   percentage. Historical values stay historical. When parsing or selecting quota windows,
+   retain valid readings if another window is unusable, including when both map to the same
+   display slot. This keeps known quota visible when a provider sends partial data.
 4. **Preserve provider-specific reset semantics.** Codex displays a documented rollover to
    `0%` with reset `--` after a known reset time has passed. Antigravity can show stale
    history, and OmniRoute receipt time leaves upstream age unknown. These distinctions
