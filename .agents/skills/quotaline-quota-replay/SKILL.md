@@ -18,13 +18,14 @@ Require immutable checkouts or Git exports, not a working tree of unknown state:
 - `EVIDENCE`: empty directory outside both trees for this replay's logs.
 
 Record the public repository, full commit SHAs and input provenance. For Git checkouts, verify
-that each checkout root and its HEAD match the inputs and that both trees are clean.
+each root and commit. The status commands must return no entries, including ignored files in
+the checker, candidate source and workflow paths. A fresh verified export also works.
 
 ```bash
 git -C "$BASE" rev-parse --show-toplevel HEAD
 git -C "$HEAD" rev-parse --show-toplevel HEAD
-git -C "$BASE" status --porcelain
-git -C "$HEAD" status --porcelain
+git -C "$BASE" status --porcelain --ignored --untracked-files=all -- scripts .github/workflows
+git -C "$HEAD" status --porcelain --ignored --untracked-files=all -- src .github/workflows
 git -C "$BASE" show HEAD:scripts/quota_acceptance.py | cmp - "$BASE/scripts/quota_acceptance.py"
 ```
 
@@ -53,7 +54,11 @@ Label the result as verification of hosted output and record that no new replay 
 
 ## Local replay
 
-`--container` requires Docker already installed and the pinned image already present locally. Confirm with `docker image inspect <image>`, using the image named in `$BASE/scripts/quota_acceptance.py`; do not let the checker pull it. Use the offline option below if its requirements are met. Otherwise stop inconclusive. Run the base checker against the exact head and capture everything:
+Use the base checker's restricted Docker container for every local replay. Check that
+`docker image inspect <image>` succeeds for the pinned image in
+`$BASE/scripts/quota_acceptance.py`. If Docker or the image is unavailable, verify a matching
+hosted job or record an inconclusive result. Capture the local output and the checker's exit
+status with Bash.
 
 ```bash
 set +e
@@ -63,19 +68,17 @@ set -e
 printf 'exit=%s\n' "$status"
 ```
 
-Use the same command without `--container` only when both input trees are reviewed public
-sources and the execution environment independently blocks network access and keeps credentials
-out of reach. Record how that boundary was established.
-
 ## Interpret and record
 
 The checker prints `quota acceptance: N cases (container|local host)`, one `PASS` or `FAIL` per case, then `OK: N cases passed` or `FAILED M/N cases: ...`.
 
 - `0` with an `OK` summary: replay passed. Record the counts.
-- `1` with a `FAILED` summary where every `FAIL` shows stdout, stderr or exit-status mismatch: asserted failure. Record pass/fail counts and the first failing case name.
+- `1` with a `FAILED` summary and a mismatch attributable to the candidate after it started:
+  asserted failure. Record the counts and failing case names.
 - `2`: usage or setup failure (invalid repo root or symlink, missing Docker, image preparation). Inconclusive.
-- `1` without complete per-case verdicts, or with launch errors, Docker startup failures,
-  or timeout: inconclusive.
+- The checker can print a Docker error as a case exit-status or stderr mismatch. Treat Docker
+  exit codes 125, 126 or 127, daemon or mount errors, timeouts, missing verdicts, and failures
+  of uncertain origin as inconclusive. Apply this rule to hosted logs and local output.
 
 Save the recorded SHAs and provenance, exact command, numeric exit code, pass/fail counts,
 failed case names and a bounded excerpt of the synthetic output. Report one verdict: passed,
