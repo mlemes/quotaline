@@ -117,7 +117,7 @@ jobs:
           ACCEPTANCE_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           ACCEPTANCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           ACCEPTANCE_OUTCOME: ${{ steps.checker.outcome }}
-          ACCEPTANCE_JOB_ID: ${{ job.check_run_id }}
+          ACCEPTANCE_CHECK_RUN_ID: ${{ job.check_run_id }}
         run: |
           case "$ACCEPTANCE_OUTCOME" in
             success)
@@ -144,5 +144,6 @@ jobs:
             echo "- Configured base revision: \`$ACCEPTANCE_BASE_SHA\`"
             echo "- Configured candidate revision: \`$ACCEPTANCE_HEAD_SHA\`"
             echo "- Checker outcome: \`${ACCEPTANCE_OUTCOME:-unknown}\`"
-            echo "- Detailed job and synthetic expected/actual output: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/job/$ACCEPTANCE_JOB_ID"
+            echo "- Detailed check run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/runs/$ACCEPTANCE_CHECK_RUN_ID"
+            echo "  Select **Independent acceptance (base-owned checker)** for the synthetic expected/actual output."
           } | tee -a "$GITHUB_STEP_SUMMARY"
