@@ -61,6 +61,9 @@ jobs:
 
       - name: Check for the base-owned checker
         id: check
+        env:
+          ACCEPTANCE_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          ACCEPTANCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if [ -f base/scripts/quota_acceptance.py ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
@@ -68,7 +71,15 @@ jobs:
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "::warning title=Independent acceptance skipped::The base branch has no scripts/quota_acceptance.py yet. Independent acceptance requires a checker in the base commit."
-            echo "Independent acceptance skipped: the base branch has no checker." >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "## Independent acceptance skipped"
+              echo
+              echo "The base branch has no \`scripts/quota_acceptance.py\`, so independent acceptance did not run."
+              echo
+              echo "- Expected base revision: \`$ACCEPTANCE_BASE_SHA\`"
+              echo "- Expected candidate revision: \`$ACCEPTANCE_HEAD_SHA\`"
+              echo "- Logs: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
   independent-acceptance:
@@ -97,4 +108,41 @@ jobs:
           persist-credentials: false
 
       - name: Run the base-owned checker against candidate src
+        id: checker
         run: python3 -I -B base/scripts/quota_acceptance.py "$GITHUB_WORKSPACE/candidate" --container
+
+      - name: Write independent acceptance summary
+        if: ${{ always() }}
+        env:
+          ACCEPTANCE_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          ACCEPTANCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          ACCEPTANCE_OUTCOME: ${{ steps.checker.outcome }}
+          ACCEPTANCE_JOB_ID: ${{ job.check_run_id }}
+        run: |
+          case "$ACCEPTANCE_OUTCOME" in
+            success)
+              text="The base-owned checker ran and passed."
+              ;;
+            failure)
+              text="The checker step failed. Inspect its logs for the failure details."
+              ;;
+            cancelled)
+              text="The base-owned checker was cancelled before completion; no replay result is claimed."
+              ;;
+            skipped)
+              text="The base-owned checker did not run; no replay result is claimed."
+              ;;
+            *)
+              text="The base-owned checker has no recorded outcome; no replay result is claimed."
+              ;;
+          esac
+          {
+            echo "## Independent acceptance"
+            echo
+            echo "$text"
+            echo
+            echo "- Configured base revision: \`$ACCEPTANCE_BASE_SHA\`"
+            echo "- Configured candidate revision: \`$ACCEPTANCE_HEAD_SHA\`"
+            echo "- Checker outcome: \`${ACCEPTANCE_OUTCOME:-unknown}\`"
+            echo "- Detailed job and synthetic expected/actual output: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/job/$ACCEPTANCE_JOB_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
