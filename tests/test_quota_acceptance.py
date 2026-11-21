@@ -1,6 +1,9 @@
+import errno
 import importlib.util
 import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -78,26 +81,70 @@ def test_evaluated_candidate_uses_normal_exit_contract(
 
 
 @pytest.mark.parametrize(
-    ("container", "problem"),
+    ("container", "problem", "reason"),
     [
-        (True, 125),
-        (True, 126),
-        (True, 127),
-        (False, subprocess.TimeoutExpired(cmd=["python3"], timeout=20)),
-        (True, subprocess.TimeoutExpired(cmd=["docker"], timeout=20)),
-        (False, OSError("untrusted runner message")),
-        (True, OSError("untrusted runner message")),
+        (True, 125, "container exit status 125"),
+        (True, 126, "container exit status 126"),
+        (True, 127, "container exit status 127"),
+        (False, subprocess.TimeoutExpired(cmd=["python3"], timeout=20), "timed out"),
+        (True, subprocess.TimeoutExpired(cmd=["docker"], timeout=20), "timed out"),
+        (False, OSError("untrusted runner message"), "host process"),
+        (True, OSError("untrusted runner message"), "container process"),
+        (
+            False,
+            PermissionError(errno.EACCES, "untrusted runner message", "/synthetic/private-path"),
+            "host process",
+        ),
+        (
+            True,
+            FileNotFoundError(errno.ENOENT, "untrusted runner message", "/synthetic/private-path"),
+            "container process",
+        ),
     ],
 )
-def test_inconclusive_stops_after_current_case(monkeypatch, capsys, tmp_path, container, problem):
+def test_inconclusive_stops_after_current_case(
+    monkeypatch, capsys, tmp_path, container, problem, reason
+):
     status, output, names, calls = _run_checker(
         monkeypatch, capsys, tmp_path, {1: problem}, container
     )
     assert status == 2
     assert calls == 2
     assert f"PASS {names[0]}" in output
-    assert f"INCONCLUSIVE {names[1]}" in output
+    diagnostic = next(
+        row for row in output.splitlines() if row.startswith(f"INCONCLUSIVE {names[1]}")
+    )
+    assert reason in diagnostic
     assert f"FAIL {names[1]}" not in output
+    assert "untrusted runner message" not in output
+    assert "/synthetic/private-path" not in output
+    if isinstance(problem, OSError):
+        assert errno.errorcode.get(problem.errno, type(problem).__name__) in diagnostic
+
+
+@pytest.mark.parametrize("cleanup", [False, True], ids=["creation", "cleanup"])
+def test_host_workspace_error_describes_operation_without_private_details(
+    monkeypatch, capsys, tmp_path, cleanup
+):
+    real_workspace = tempfile.TemporaryDirectory
+    error = PermissionError(errno.EACCES, "untrusted runner message", "/synthetic/private-path")
+
+    @contextmanager
+    def failed_workspace(**kwargs):
+        if cleanup:
+            with real_workspace(**kwargs) as path:
+                yield path
+        raise error
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", failed_workspace)
+    status, output, names, calls = _run_checker(monkeypatch, capsys, tmp_path, {}, False)
+    assert status == 2
+    assert calls == int(cleanup)
+    diagnostic = next(
+        row for row in output.splitlines() if row.startswith(f"INCONCLUSIVE {names[0]}")
+    )
+    assert "host workspace" in diagnostic and "EACCES" in diagnostic
+    assert "/synthetic/private-path" not in output
     assert "untrusted runner message" not in output
 
 

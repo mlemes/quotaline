@@ -18,6 +18,7 @@ The full run includes the baseline controls. --controls-only runs just those con
 """
 
 import argparse
+import errno
 import json
 import shutil
 import subprocess
@@ -198,40 +199,64 @@ def _host_command(src: Path) -> list[str]:
     return [sys.executable, "-I", "-B", "-c", CHILD_CODE, str(src)]
 
 
+class _RunnerError(Exception):
+    def __init__(self, operation: str, cause: OSError) -> None:
+        super().__init__(operation)
+        self.operation = operation
+        self.cause = cause
+
+
+def _os_error_detail(error: OSError) -> str:
+    number = error.errno
+    if type(number) is int and 0 <= number <= 2**31 - 1:
+        return errno.errorcode.get(number, f"errno {number}")
+    return type(error).__name__
+
+
 def _run(case: Case, src: Path, container: bool) -> subprocess.CompletedProcess[str]:
     command = _container_command(src) if container else _host_command(src)
     if container:
-        return subprocess.run(
-            command,
-            input=case.stdin,
-            text=True,
-            capture_output=True,
-            timeout=TIMEOUT,
-        )
-    with tempfile.TemporaryDirectory(prefix="quota-acceptance-") as temporary:
-        root = Path(temporary)
-        home = root / "home"
-        work = root / "work"
-        home.mkdir()
-        work.mkdir()
-        env = {
-            "HOME": str(home),
-            "PATH": "/usr/local/bin:/usr/bin:/bin",
-            "TZ": "UTC",
-            "LC_ALL": "C",
-            "LANG": "C",
-            "PYTHONIOENCODING": "utf-8",
-            "PYTHONUTF8": "1",
-        }
-        return subprocess.run(
-            command,
-            input=case.stdin,
-            text=True,
-            capture_output=True,
-            timeout=TIMEOUT,
-            cwd=work,
-            env=env,
-        )
+        try:
+            return subprocess.run(
+                command,
+                input=case.stdin,
+                text=True,
+                capture_output=True,
+                timeout=TIMEOUT,
+            )
+        except OSError as error:
+            raise _RunnerError("container process invocation", error) from None
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="quota-acceptance-") as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            work = root / "work"
+            home.mkdir()
+            work.mkdir()
+            env = {
+                "HOME": str(home),
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
+                "TZ": "UTC",
+                "LC_ALL": "C",
+                "LANG": "C",
+                "PYTHONIOENCODING": "utf-8",
+                "PYTHONUTF8": "1",
+            }
+            try:
+                return subprocess.run(
+                    command,
+                    input=case.stdin,
+                    text=True,
+                    capture_output=True,
+                    timeout=TIMEOUT,
+                    cwd=work,
+                    env=env,
+                )
+            except OSError as error:
+                raise _RunnerError("host process invocation", error) from None
+    except OSError as error:
+        raise _RunnerError("host workspace", error) from None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -266,8 +291,11 @@ def main(argv: list[str] | None = None) -> int:
         except subprocess.TimeoutExpired:
             print(f"INCONCLUSIVE {case.name}: timed out after {TIMEOUT}s")
             return 2
-        except OSError as error:
-            print(f"INCONCLUSIVE {case.name}: runner invocation error ({type(error).__name__})")
+        except _RunnerError as error:
+            print(
+                f"INCONCLUSIVE {case.name}: {error.operation} failed "
+                f"({_os_error_detail(error.cause)})"
+            )
             return 2
 
         if args.container and completed.returncode in (125, 126, 127):

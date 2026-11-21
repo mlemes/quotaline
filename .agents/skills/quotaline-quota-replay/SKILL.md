@@ -50,11 +50,13 @@ exit and job conclusion. For a stdout failure, compare the logged strings with t
 expectation, preserving spaces. A successful step may imply exit zero. Label that exit as
 inferred.
 
-If a per-case timeout, failed runner invocation or container status 125, 126 or 127 stops the
-suite, verify the contiguous earlier verdicts against the base case order, the next case's
-named `INCONCLUSIVE` reason, and exit 2. Record inconclusive without assigning verdicts to
-unrun cases. For older bases, use the historical interpretation below. Record inconclusive if
-the job evidence is missing, stale or inconsistent.
+If a per-case timeout or failed runner invocation in either mode, or container status 125, 126
+or 127 in container mode, stops the suite, verify the contiguous earlier verdicts against the
+base case order, the next case's named `INCONCLUSIVE` reason, and exit 2. Count only the rows
+already printed and record inconclusive without assigning verdicts to unrun cases. A setup
+failure before the first case exits 2 with no case rows. For older bases, use the historical
+interpretation below. Record inconclusive if the job evidence is missing, stale or
+inconsistent.
 Label the result as verification of hosted output and record that no new replay ran locally.
 
 ## Local replay
@@ -78,10 +80,11 @@ printf 'exit=%s\n' "$status"
 - `0` with an `OK` summary means the replay passed. Record the counts.
 - `1` with a `FAILED` summary means an evaluated candidate mismatched. Record the counts
   and case names. In host mode, candidate exits 125, 126 or 127 are ordinary mismatches.
-- `2` means inconclusive. For a per-case timeout, invocation error or container status
-  125, 126 or 127, the checker preserves earlier rows and stops with
-  `INCONCLUSIVE <case>: <reason>`. Record the affected case and reason. The reserved Docker
-  statuses leave attribution uncertain.
+- `2` means inconclusive. A setup failure before the first case has no case rows. For a
+  per-case timeout or invocation error in either mode, or container status 125, 126 or 127 in
+  container mode, the checker preserves earlier rows and stops with
+  `INCONCLUSIVE <case>: <reason>`. Count only those printed rows and record the affected case
+  and reason. The reserved Docker statuses leave attribution uncertain.
 - For older base commits, use the recorded base SHA and observed runner or infrastructure
   evidence to identify an inconclusive result, even if the checker printed `FAIL` and exited
   `1`. Preserve an observed candidate assertion or exit status in host mode as candidate
