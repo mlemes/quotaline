@@ -348,6 +348,13 @@ Use the host commands for sources you trust. The checker uses a UTC/C locale, an
 starts with an empty HOME and working directory. Container mode fetches the pinned Linux x64
 Python image if needed, then mounts only the candidate `src` read-only for offline execution.
 
+The checker exits `0` when every case passes, `1` for a candidate mismatch, and `2` for an
+inconclusive setup or invocation. A setup failure before the first case exits `2` without
+printing case rows. After the suite starts, a per-case timeout or invocation error in either
+mode, or container status 125, 126 or 127 in container mode, stops the run with
+`INCONCLUSIVE <case>: <reason>` and preserves earlier results. Count only the case rows printed before that stop. Those reserved container statuses have ambiguous
+attribution. Older checker logs may have counted these runner errors as candidate failures.
+
 GitHub Actions runs candidate controls in a restricted container. Independent acceptance uses
 the checker from the exact base commit and the CLI from the exact head commit. The independent
 job is skipped during bootstrap while the base lacks a checker. The PR can change the
