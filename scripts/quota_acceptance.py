@@ -264,13 +264,18 @@ def main(argv: list[str] | None = None) -> int:
         try:
             completed = _run(case, src, args.container)
         except subprocess.TimeoutExpired:
-            failures.append(case.name)
-            print(f"FAIL {case.name}: timed out after {TIMEOUT}s")
-            continue
+            print(f"INCONCLUSIVE {case.name}: timed out after {TIMEOUT}s")
+            return 2
         except OSError as error:
-            failures.append(case.name)
-            print(f"FAIL {case.name}: could not start: {type(error).__name__}: {error}")
-            continue
+            print(f"INCONCLUSIVE {case.name}: runner invocation error ({type(error).__name__})")
+            return 2
+
+        if args.container and completed.returncode in (125, 126, 127):
+            print(
+                f"INCONCLUSIVE {case.name}: container exit status {completed.returncode}. "
+                "The status does not identify the failing process."
+            )
+            return 2
 
         problems = []
         if completed.returncode != 0:

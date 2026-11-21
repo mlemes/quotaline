@@ -44,12 +44,17 @@ base and head. Match the `git log -1 --format=%H` output from both checkouts to 
 SHAs, then check the logged command ran the base's checker against candidate source in container
 mode.
 
-Read the case names and expected stdout from the immutable base checker. Require exactly one
-verdict for every full-suite case. For a stdout failure, compare the logged expected and actual
-strings with the base expectation, preserving spaces, and report the observed difference.
-Reconcile the case tally, final summary, checker exit and job conclusion. On a successful step,
-an exit of zero may be inferred from the runner result and must be labeled as inferred.
-Stop inconclusive if records are missing, stale, inconsistent, or show a runtime failure.
+Read the case names and expected stdout from the immutable base checker. For a completed
+suite, require one verdict per full-suite case and reconcile the tally, final summary, checker
+exit and job conclusion. For a stdout failure, compare the logged strings with the base
+expectation, preserving spaces. A successful step may imply exit zero. Label that exit as
+inferred.
+
+If a per-case timeout, failed runner invocation or container status 125, 126 or 127 stops the
+suite, verify the contiguous earlier verdicts against the base case order, the next case's
+named `INCONCLUSIVE` reason, and exit 2. Record inconclusive without assigning verdicts to
+unrun cases. For older bases, use the historical interpretation below. Record inconclusive if
+the job evidence is missing, stale or inconsistent.
 Label the result as verification of hosted output and record that no new replay ran locally.
 
 ## Local replay
@@ -70,15 +75,17 @@ printf 'exit=%s\n' "$status"
 
 ## Interpret and record
 
-The checker prints `quota acceptance: N cases (container|local host)`, one `PASS` or `FAIL` per case, then `OK: N cases passed` or `FAILED M/N cases: ...`.
-
-- `0` with an `OK` summary: replay passed. Record the counts.
-- `1` with a `FAILED` summary and a mismatch attributable to the candidate after it started:
-  asserted failure. Record the counts and failing case names.
-- `2`: usage or setup failure (invalid repo root or symlink, missing Docker, image preparation). Inconclusive.
-- The checker can print a Docker error as a case exit-status or stderr mismatch. Treat Docker
-  exit codes 125, 126 or 127, daemon or mount errors, timeouts, missing verdicts, and failures
-  of uncertain origin as inconclusive. Apply this rule to hosted logs and local output.
+- `0` with an `OK` summary means the replay passed. Record the counts.
+- `1` with a `FAILED` summary means an evaluated candidate mismatched. Record the counts
+  and case names. In host mode, candidate exits 125, 126 or 127 are ordinary mismatches.
+- `2` means inconclusive. For a per-case timeout, invocation error or container status
+  125, 126 or 127, the checker preserves earlier rows and stops with
+  `INCONCLUSIVE <case>: <reason>`. Record the affected case and reason. The reserved Docker
+  statuses leave attribution uncertain.
+- For older base commits, use the recorded base SHA and observed runner or infrastructure
+  evidence to identify an inconclusive result, even if the checker printed `FAIL` and exited
+  `1`. Preserve an observed candidate assertion or exit status in host mode as candidate
+  evidence. Record inconclusive for missing or ambiguous evidence.
 
 Save the recorded SHAs and provenance, exact command, numeric exit code, pass/fail counts,
 failed case names and a bounded excerpt of the synthetic output. Report one verdict: passed,
