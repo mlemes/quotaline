@@ -103,9 +103,14 @@ def codex_line(sessions: Path = SESSIONS, now: float | None = None) -> str | Non
             if not w or w.get("window_minutes") is None:
                 continue
             i = 0 if w["window_minutes"] <= 1440 else 1
-            slots[i] = _window(w, now)
+            reading = _window(w, now)
+            if reading is None and slots[i] is not None:
+                continue
+            slots[i] = reading
             if i:
                 second = _label(w)
+        if all(slot is None for slot in slots):
+            return fmt_line("Codex", "no usage yet")
         return fmt_line("Codex", fmt_windows(*slots, labels=("session", second.ljust(4))))
     except Exception as e:  # noqa: BLE001
         return fmt_line("Codex", f"n/a ({type(e).__name__})")

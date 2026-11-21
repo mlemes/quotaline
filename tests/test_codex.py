@@ -1,8 +1,12 @@
+import io
 import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
+from usage_statusline import main as m
 from usage_statusline.claude import claude_line
 from usage_statusline.codex import codex_line, latest_rate_limits
 
@@ -112,3 +116,128 @@ def test_newest_file_wins(tmp_path: Path) -> None:
     session(tmp_path, [event(limits(primary=win(1, 300)))], name="rollout-a.jsonl", mtime=100)
     session(tmp_path, [event(limits(primary=win(2, 300)))], name="rollout-b.jsonl", mtime=200)
     assert latest_rate_limits(tmp_path)["primary"]["used_percent"] == 2
+
+
+def _run_main(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    sessions: Path,
+) -> list[str]:
+    claude_limits = {"five_hour": {"used_percentage": 10, "resets_at": FUTURE}}
+    monkeypatch.setattr(m, "omniroute_lines", lambda: None)
+    monkeypatch.setattr(m, "antigravity_line", lambda: None)
+    monkeypatch.setattr(m, "opencode_line", lambda: None)
+    monkeypatch.setattr(m, "codex_line", lambda: codex_line(sessions, NOW))
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"rate_limits": claude_limits})))
+    m.main()
+    return capsys.readouterr().out.splitlines()
+
+
+@pytest.mark.parametrize(
+    "empty_limits",
+    [
+        limits(),
+        limits(
+            primary={"used_percent": None, "window_minutes": 300, "resets_at": FUTURE},
+            secondary={"used_percent": 25, "window_minutes": 10080, "resets_at": None},
+        ),
+        limits(
+            primary={"used_percent": 15, "window_minutes": None, "resets_at": FUTURE},
+            secondary={},
+        ),
+    ],
+    ids=["null-windows", "missing-usage-and-reset", "missing-minutes-and-empty"],
+)
+def test_empty_or_unusable_latest_snapshot_hides_codex_while_claude_shows(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    empty_limits: dict,
+) -> None:
+    older_usage = event(limits(primary=win(42, 300)), ts="2026-09-28T11:00:00Z")
+    session(tmp_path, [older_usage, event(empty_limits)])
+    lines = _run_main(monkeypatch, capsys, tmp_path)
+    assert len(lines) == 1
+    assert lines[0].startswith("Claude") and "10%" in lines[0]
+
+
+def test_real_zero_with_future_reset_remains_visible(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    session(tmp_path, [event(limits(primary=win(0, 300, FUTURE), secondary=win(0, 10080, FUTURE)))])
+    lines = _run_main(monkeypatch, capsys, tmp_path)
+    assert len(lines) == 2
+    assert lines[0].startswith("Claude")
+    reset_text = datetime.fromtimestamp(FUTURE).astimezone().strftime("%a %H:%M")
+    assert lines[1].startswith("Codex")
+    assert f"session   0% · resets {reset_text}" in lines[1]
+    assert f"week   0% · resets {reset_text}" in lines[1]
+
+
+def test_expired_usage_rolls_to_zero_with_dashes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    session(
+        tmp_path, [event(limits(primary=win(80, 300, NOW - 10), secondary=win(34, 10080, FUTURE)))]
+    )
+    lines = _run_main(monkeypatch, capsys, tmp_path)
+    assert len(lines) == 2
+    assert lines[1].startswith("Codex")
+    assert "session   0% · resets --" in lines[1]
+    assert "week  34%" in lines[1]
+
+
+@pytest.mark.parametrize(
+    ("codex_limits", "present_part", "missing_part", "second_label"),
+    [
+        (limits(primary=win(12, 300, FUTURE)), "session  12%", "week   --", "week"),
+        (limits(secondary=win(34, 10080, FUTURE)), "week  34%", "session   --", "week"),
+        (limits(primary=win(5, 43200, FUTURE)), "30d    5%", "session   --", "30d"),
+    ],
+    ids=["session-only", "week-only", "30d-only"],
+)
+def test_single_usable_window_aligns_with_populated_row_and_retains_missing_counterpart(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    codex_limits: dict,
+    present_part: str,
+    missing_part: str,
+    second_label: str,
+) -> None:
+    session(tmp_path, [event(codex_limits)])
+    lines = _run_main(monkeypatch, capsys, tmp_path)
+    assert len(lines) == 2
+    claude, codex = lines
+    assert present_part in codex
+    assert missing_part in codex
+    assert codex.index("|") == claude.index("|")
+    assert codex.index(second_label) == claude.index("week")
+
+
+@pytest.mark.parametrize(
+    ("primary", "secondary", "present_part", "missing_part"),
+    [
+        (win(5, 43200), win(None, 10080), "30d    5%", "session   --"),
+        (win(14, 300), win(None, 300), "session  14%", "week   --"),
+    ],
+    ids=["longer-slot", "session-slot"],
+)
+def test_unusable_window_cannot_replace_usable_slot(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    primary: dict,
+    secondary: dict,
+    present_part: str,
+    missing_part: str,
+) -> None:
+    session(tmp_path, [event(limits(primary=primary, secondary=secondary))])
+    claude, codex = _run_main(monkeypatch, capsys, tmp_path)
+    assert present_part in codex
+    assert missing_part in codex
+    assert codex.index("|") == claude.index("|")

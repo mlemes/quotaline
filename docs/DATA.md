@@ -79,6 +79,9 @@ Optional OmniRoute mode reads only the selected local quota snapshots described 
   second column, labeled `week` or `<days>d`.
 - The numbers are only as fresh as the last Codex response on this machine. A past `resets_at`
   means the window has reset since then, so the line shows `0%` and `--`.
+- If neither slot in the latest matching `token_count` snapshot has a displayable reading,
+  the status line hides the Codex row. It uses the latest snapshot even when older events
+  contain usage.
 - Before the first Codex run, `~/.codex/sessions/` doesn't exist, and the `threads` table in
   `~/.codex/state_5.sqlite` is empty. The rollout path is also stored there, in
   `threads.rollout_path`.
