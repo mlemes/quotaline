@@ -109,7 +109,11 @@ jobs:
 
       - name: Run the base-owned checker against candidate src
         id: checker
-        run: python3 -I -B base/scripts/quota_acceptance.py "$GITHUB_WORKSPACE/candidate" --container
+        run: |
+          status=0
+          python3 -I -B base/scripts/quota_acceptance.py "$GITHUB_WORKSPACE/candidate" --container || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
 
       - name: Write independent acceptance summary
         if: ${{ always() }}
@@ -117,23 +121,30 @@ jobs:
           ACCEPTANCE_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           ACCEPTANCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           ACCEPTANCE_OUTCOME: ${{ steps.checker.outcome }}
+          ACCEPTANCE_CHECKER_STATUS: ${{ steps.checker.outputs.status }}
           ACCEPTANCE_CHECK_RUN_ID: ${{ job.check_run_id }}
         run: |
-          case "$ACCEPTANCE_OUTCOME" in
-            success)
+          case "$ACCEPTANCE_OUTCOME:$ACCEPTANCE_CHECKER_STATUS" in
+            success:0)
               text="The base-owned checker ran and passed."
               ;;
-            failure)
-              text="The checker step failed. Inspect its logs for the failure details."
+            failure:1)
+              text="The acceptance check failed. Inspect the log for a case mismatch or an error running the checker."
               ;;
-            cancelled)
+            failure:2)
+              text="The replay was inconclusive. Inspect the checker log for any cases evaluated before it stopped."
+              ;;
+            failure:*)
+              text="The checker step failed with an unexpected or unrecorded exit status. Inspect its log for details."
+              ;;
+            cancelled:*)
               text="The base-owned checker was cancelled before completion; no replay result is claimed."
               ;;
-            skipped)
+            skipped:*)
               text="The base-owned checker did not run; no replay result is claimed."
               ;;
             *)
-              text="The base-owned checker has no recorded outcome; no replay result is claimed."
+              text="The available checker status does not establish a replay result. Inspect the job log for details."
               ;;
           esac
           {
@@ -144,6 +155,7 @@ jobs:
             echo "- Configured base revision: \`$ACCEPTANCE_BASE_SHA\`"
             echo "- Configured candidate revision: \`$ACCEPTANCE_HEAD_SHA\`"
             echo "- Checker outcome: \`${ACCEPTANCE_OUTCOME:-unknown}\`"
+            echo "- Checker exit status: \`${ACCEPTANCE_CHECKER_STATUS:-unrecorded}\`"
             echo "- Detailed check run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/runs/$ACCEPTANCE_CHECK_RUN_ID"
             echo "  Select **Independent acceptance (base-owned checker)** for the synthetic expected/actual output."
           } | tee -a "$GITHUB_STEP_SUMMARY"
