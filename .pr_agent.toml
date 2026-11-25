@@ -1,4 +1,0 @@
-# Temporary repository-wide setting. Track deployment and removal in https://github.com/mlemes/quotaline/issues/23.
-# Remove after the synthetic run. The owner's rollback timer starts at 2026-11-25 18:45 UTC (15:45 Brasília).
-[checks]
-enable_auto_checks_feedback = true
