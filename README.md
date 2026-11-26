@@ -5,6 +5,8 @@ Antigravity (`agy`), and Codex CLI on your ChatGPT plan. It shows session and we
 when provided, with model quota fallback for Gemini. An optional [local OmniRoute source](#use-a-local-omniroute-source-optional)
 reads explicitly selected accounts instead of the native readers.
 
+[See the 60-second walkthrough](#60-second-walkthrough) of a quota fix that shipped and a regression caught before merge.
+
 ```
 Claude         session  24% · resets Sun 20:00 | week  41% · resets Thu 21:13
 AG Gemini      session   0% · resets Sun 16:02 | week  14% · resets Mon 23:28
@@ -329,6 +331,61 @@ These are the default native readers; optional OmniRoute mode replaces this runt
   transcript format is internal and undocumented, so it can change between Codex versions. It
   was verified on Codex CLI 0.158.0.
 - A missing window shows `--` and keeps its width, so the columns stay aligned.
+
+## 60-second walkthrough
+
+**What shipped.** PR #10 kept a reported 37% session visible when Claude omitted its reset.
+All eight original checks passed. Qodo spotted a second case: an out-of-range session reset
+hid a valid 41% week. The repair shows the unusable session as `--` and keeps the week:
+
+```text
+Missing reset       Claude         session  37% · resets --        | week   --
+Out-of-range reset  Claude         session   --                    | week  41% · resets Sat 16:00
+```
+
+We merged the repair and later added the second input to the independent checker.
+The original code passed 8/9 and the repair passed 9/9.
+[Hosted Qodo review after the fix](https://github.com/mlemes/quotaline/pull/10#issuecomment-7050920492)
+· [Sonnet’s record of the original finding](https://github.com/mlemes/quotaline/pull/10#pullrequestreview-5999597550)
+· [Ninth case and replay results](https://github.com/mlemes/quotaline/pull/29)
+
+**What CI stopped.** In a deliberate rehearsal, PR #13 treated a reported zero as missing.
+The checker from the passing base caught exactly the one mismatch predicted across the same
+eight cases used on PR #10. The weekly reading survived, but the session lost its zero:
+
+```text
+Expected  Claude         session   0% · resets --        | week  41% · resets Sat 16:00
+Observed  Claude         session   --                    | week  41% · resets Sat 16:00
+```
+
+The project orchestrator closed PR #13 unmerged. [Prediction](https://github.com/mlemes/quotaline/issues/11)
+· [Failed check](https://github.com/mlemes/quotaline/actions/runs/44840329330/job/136646885266)
+· [Closed PR](https://github.com/mlemes/quotaline/pull/13)
+
+<details>
+<summary>Replay the original eight checks on both revisions</summary>
+
+Use Bash, Git, Python 3.13+ and Docker. The clone and first image pull require internet access.
+The checker runs synthetic input in a pinned container with networking disabled.
+
+```bash
+(
+  set -e
+  cd "$(mktemp -d)"
+  git clone --quiet https://github.com/mlemes/quotaline.git passing
+  cd passing
+  git switch --quiet --detach 98d0ec29de7688e9fca79e1e93a08e9ee3540c37
+  git fetch --quiet origin refs/pull/13/head
+  git worktree add --quiet --detach ../stopped d8e63915a15a29842538670820631ab23b1fb1dd
+  python3 -I -B scripts/quota_acceptance.py . --container
+  python3 -I -B scripts/quota_acceptance.py ../stopped --container
+)
+```
+
+The passing revision prints `OK: 8 cases passed` and exits 0. The rehearsal prints
+`FAILED 1/8 cases: zero-reset-omitted-plus-41-week-fixed-reset` and exits 1.
+
+</details>
 
 ## Acceptance checks
 
