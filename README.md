@@ -336,7 +336,8 @@ These are the default native readers; optional OmniRoute mode replaces this runt
 exact stdout, empty stderr and the exit status. The baseline controls cover a normal fixed-reset
 line and hidden reset-only, empty and malformed input. The full run also covers a 37% window
 with its reset omitted or null, an aligned 0% session with an unknown reset and a 41% week
-with a fixed reset, and missing usage with no invented rate.
+with a fixed reset, and missing usage with no invented rate. A ninth case checks that an
+out-of-range session reset hides the session while the valid 41% week stays visible.
 
 ```bash
 python3 scripts/quota_acceptance.py . --controls-only

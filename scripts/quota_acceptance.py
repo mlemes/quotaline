@@ -124,6 +124,18 @@ FULL_CASES = CONTROL_CASES + (
         ),
         f"Claude         session   --                    | week  41% · resets {RESET_TEXT}\n",
     ),
+    Case(
+        "out-of-range-session-reset-keeps-week",
+        _json(
+            {
+                "rate_limits": {
+                    "five_hour": {"used_percentage": 37, "resets_at": 1e18},
+                    "seven_day": {"used_percentage": 41, "resets_at": FIXED_RESET},
+                }
+            }
+        ),
+        f"Claude         session   --                    | week  41% · resets {RESET_TEXT}\n",
+    ),
 )
 
 
