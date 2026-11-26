@@ -387,6 +387,41 @@ The passing revision prints `OK: 8 cases passed` and exits 0. The rehearsal prin
 
 </details>
 
+<details>
+<summary>Replay the Codex fix</summary>
+
+[PR #14](https://github.com/mlemes/quotaline/pull/14) hid the Codex row when the newest
+record had no usage. With Bash, Git and Python 3.13+, run the same six checks against
+both revisions. Each Python invocation takes one candidate checkout path, writes temporary
+synthetic session records and substitutes the other provider readers. Only the clone needs
+network access.
+
+```bash
+(
+  set -e
+  cd "$(mktemp -d)"
+  git clone --quiet https://github.com/mlemes/quotaline.git
+  cd quotaline
+  git worktree add --quiet --detach ../before 98d0ec29de7688e9fca79e1e93a08e9ee3540c37
+  git worktree add --quiet --detach ../repaired e388075006547274291a0140fffe8341c0fb8bac
+  before_status=0
+  python3 -I -S -B scripts/replay_codex.py ../before > ../before.log || before_status=$?
+  cat ../before.log
+  echo "Before exit $before_status (expected 1)"
+  test "$before_status" -eq 1
+  grep -Fxq '3/6 checks passed' ../before.log
+  python3 -I -S -B scripts/replay_codex.py ../repaired
+  echo "Repaired exit 0"
+)
+```
+
+Before the fix, **3/6** pass. The newest empty record leaves a Codex row visible, so the
+42% Claude peer also fails the check that it appears alone. An unusable weekly window
+erases a valid 30-day reading in the same slot. The repaired head passes **6/6**.
+Reported zero, rollover zero and single-window alignment pass on both revisions.
+
+</details>
+
 ## Acceptance checks
 
 `scripts/quota_acceptance.py` runs the real status-line CLI in a fresh interpreter and compares
