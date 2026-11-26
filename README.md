@@ -336,7 +336,7 @@ These are the default native readers; optional OmniRoute mode replaces this runt
 
 **What shipped.** PR #10 kept a reported 37% session visible when Claude omitted its reset.
 All eight original checks passed. Qodo spotted a second case: an out-of-range session reset
-hid a valid 41% week. The repaired CLI produced these rows for the two inputs:
+hid a valid 41% week. The repair shows the unusable session as `--` and keeps the week:
 
 ```text
 Missing reset       Claude         session  37% · resets --        | week   --
@@ -345,12 +345,13 @@ Out-of-range reset  Claude         session   --                    | week  41% �
 
 We merged the repair and later added the second input to the independent checker.
 The original code passed 8/9 and the repair passed 9/9.
-[Finding recorded during review](https://github.com/mlemes/quotaline/pull/10#pullrequestreview-5999597550)
+[Hosted Qodo review after the fix](https://github.com/mlemes/quotaline/pull/10#issuecomment-7050920492)
+· [Sonnet’s record of the original finding](https://github.com/mlemes/quotaline/pull/10#pullrequestreview-5999597550)
 · [Ninth case and replay results](https://github.com/mlemes/quotaline/pull/29)
 
 **What CI stopped.** In a deliberate rehearsal, PR #13 treated a reported zero as missing.
-The checker from the passing base caught exactly the one mismatch predicted across the eight
-historical cases. The weekly reading survived, but the session lost its zero:
+The checker from the passing base caught exactly the one mismatch predicted across the same
+eight cases used on PR #10. The weekly reading survived, but the session lost its zero:
 
 ```text
 Expected  Claude         session   0% · resets --        | week  41% · resets Sat 16:00
